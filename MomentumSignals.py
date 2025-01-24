@@ -64,10 +64,6 @@ def calculate_monthly_pivot(data):
     pivot = (high + low + close) / 3
     return pivot
 
-
-
-
-
 def fetch_stock_data(symbol, interval, period="6mo"):
     """Fetches stock data using yfinance directly."""
     try:
@@ -199,11 +195,11 @@ def main():
         return
 
     st.write(f"App refreshed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")  # Log refresh time
-    st.title("1D and 5D Signal Changes with Indicators")
+    st.title("Stock Summary with 1D and 5D timeframe")
 
     # Symbols and timeframe
     symbols = [
-        "AAPL", "MSFT", "AMZN", "GOOGL", "QQQ", "NVDA", "TSLA", "META", "SPY", "UVXY", "DIA", "IWM", "COIN", "UNH"
+        "AAPL", "MSFT","TSM","AVGO","AMD","IBIT", "AMZN", "GOOGL", "QQQ", "NVDA", "TSLA", "META", "SPY", "UVXY", "DIA", "IWM", "COIN", "UNH"
     ]
     timeframes = ["1d", "5d"]
 
