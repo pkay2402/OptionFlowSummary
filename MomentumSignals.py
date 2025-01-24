@@ -251,22 +251,25 @@ def main():
         if current_signal != last_signal:
             trend_changes.append(f"Signal change for {symbol}: {last_signal} -> {current_signal}")
 
-    # Only send to Discord if there are trend changes
-    if trend_changes:
-        message = "\n".join(trend_changes)
-        table = df_to_markdown(pd.DataFrame(rows))  # Convert DataFrame to markdown
-        send_to_discord(message, table)
-        st.write("Changes sent to Discord.")
-    else:
-        st.write("No trend changes detected. Skipping Discord update.")
-
     # Display the current signals in the Streamlit app
     df = pd.DataFrame(rows)
     st.write("Current Signals and Indicators")
     st.dataframe(df)
 
+    # Add a manual button to send the table to Discord
+    if st.button("Send Table to Discord"):
+        # Only send to Discord if there are trend changes
+        if trend_changes:
+            message = "\n".join(trend_changes)
+            table = df_to_markdown(pd.DataFrame(rows))  # Convert DataFrame to markdown
+            send_to_discord(message, table)
+            st.write("Changes sent to Discord.")
+        else:
+            st.write("No trend changes detected. Skipping Discord update.")
+
     # Save the current signals for the next comparison
     save_signals(current_signals)
+
 
 if __name__ == "__main__":
     main()
