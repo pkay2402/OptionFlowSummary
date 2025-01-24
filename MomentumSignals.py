@@ -257,15 +257,14 @@ def main():
     st.dataframe(df)
 
     # Add a manual button to send the table to Discord
+    # Add a manual button to send the table to Discord
     if st.button("Send Table to Discord"):
-        # Only send to Discord if there are trend changes
-        if trend_changes:
-            message = "\n".join(trend_changes)
-            table = df_to_markdown(pd.DataFrame(rows))  # Convert DataFrame to markdown
-            send_to_discord(message, table)
-            st.write("Changes sent to Discord.")
-        else:
-            st.write("No trend changes detected. Skipping Discord update.")
+    # Convert the DataFrame to markdown format
+    table = df_to_markdown(df)
+    message = "Manual Push of Signals and Indicators to Discord"
+    send_to_discord(message, table)
+    st.write("Table sent to Discord manually.")
+
 
     # Save the current signals for the next comparison
     save_signals(current_signals)
