@@ -5,3 +5,4 @@ streamlit-autorefresh
 pytz
 pandas
 numpy
+tabulate
