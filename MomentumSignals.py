@@ -17,6 +17,57 @@ smooth_length = 3
 # Webhook URL for Discord
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1332367135023956009/8HH_RiKnSP7R7l7mtFHOB8kJi7ATt0TKZRrh35D82zycKC7JrFVSMpgJUmHrnDQ4mQRw"
 
+# Calculate EMA
+def calculate_ema(data, period):
+    return data.ewm(span=period, adjust=False).mean()
+
+# Calculate Monthly Pivot Points
+from datetime import datetime
+
+def calculate_monthly_pivot(data):
+    """Calculates the monthly pivot based on High, Low, and Close prices for the current month."""
+    # Flatten MultiIndex columns
+    data.columns = ['_'.join(filter(None, col)) for col in data.columns]
+
+    # Debugging: Print the flattened columns
+    print("Flattened columns:", data.columns)
+
+    # Extract the ticker name from the columns
+    ticker = [col.split('_')[1] for col in data.columns if '_' in col][0]
+
+    # Select relevant columns for the specific ticker
+    high_col = f'High_{ticker}'
+    low_col = f'Low_{ticker}'
+    close_col = f'Close_{ticker}'
+
+    # Ensure the columns exist before proceeding
+    if not all(col in data.columns for col in [high_col, low_col, close_col]):
+        raise KeyError(f"One or more required columns {high_col}, {low_col}, {close_col} are missing!")
+
+    # Select and rename columns for processing
+    data = data[[high_col, low_col, close_col]]
+    data = data.rename(columns={high_col: 'High', low_col: 'Low', close_col: 'Close'})
+
+    # Filter the data for the current month
+    current_month = datetime.now().month
+    current_year = datetime.now().year
+    data = data[(data.index.month == current_month) & (data.index.year == current_year)]
+
+    # Check if there's any data for the current month
+    if data.empty:
+        raise ValueError("No data available for the current month.")
+
+    # Calculate the pivot for the current month
+    high = data['High'].max()
+    low = data['Low'].min()
+    close = data['Close'].iloc[-1]
+    pivot = (high + low + close) / 3
+    return pivot
+
+
+
+
+
 def fetch_stock_data(symbol, interval, period="6mo"):
     """Fetches stock data using yfinance directly."""
     try:
@@ -24,10 +75,12 @@ def fetch_stock_data(symbol, interval, period="6mo"):
         if data.empty:
             st.write(f"No data received for {symbol} ({interval})")
             return pd.DataFrame()
-        return data[['Open', 'Close']].rename(columns={'Open': 'open', 'Close': 'close'})
+        # Ensure all necessary columns are present
+        return data[['Open', 'High', 'Low', 'Close', 'Volume']]
     except Exception as e:
         st.write(f"Error fetching data for {symbol} ({interval}): {e}")
         return pd.DataFrame()
+
 
 def fetch_latest_price(symbol):
     """Fetches the latest price of the stock."""
@@ -44,8 +97,8 @@ def calculate_signals(stock_data):
     if stock_data.empty or len(stock_data) < length + smooth_length * 2:
         return pd.Series(dtype=bool), pd.Series(dtype=bool)
 
-    o = stock_data['open'].values
-    c = stock_data['close'].values
+    o = stock_data['Open'].values
+    c = stock_data['Close'].values
 
     data = np.array([sum(np.sign(c[i] - o[max(0, i - j)]) for j in range(length)) for i in range(len(c))]).flatten()
     data_series = pd.Series(data, index=stock_data.index)
@@ -75,6 +128,14 @@ def analyze_stock(symbol, timeframes):
             else:
                 results[timeframe] = "Neutral"
     return results
+
+def calculate_indicators(data):
+    """Calculates EMA and Monthly Pivot values."""
+    data['EMA_21'] = calculate_ema(data['Close'], 21)
+    data['EMA_50'] = calculate_ema(data['Close'], 50)
+    data['EMA_200'] = calculate_ema(data['Close'], 200)
+    monthly_pivot = calculate_monthly_pivot(data)
+    return data, monthly_pivot
 
 # File to store last signals
 last_signals_file = "last_signals.json"
@@ -129,8 +190,8 @@ def is_market_open():
     return False
 
 def main():
-    # Refresh the app every 15 minutes (900000 milliseconds)
-    st_autorefresh(interval=900000, key="data_refresh")
+    # Refresh the app every 4 hours (14400000 milliseconds)
+    st_autorefresh(interval=14400000, key="data_refresh")
 
     # Check if the market is open
     if not is_market_open():
@@ -138,13 +199,13 @@ def main():
         return
 
     st.write(f"App refreshed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")  # Log refresh time
-    st.title("60-Minute Signal Changes for Trading")
+    st.title("1D and 5D Signal Changes with Indicators")
 
     # Symbols and timeframe
     symbols = [
         "AAPL", "MSFT", "AMZN", "GOOGL", "QQQ", "NVDA", "TSLA", "META", "SPY", "UVXY", "DIA", "IWM", "COIN", "UNH"
     ]
-    timeframes = ["60m"]
+    timeframes = ["1d", "5d"]
 
     # Data storage
     rows = []
@@ -156,13 +217,31 @@ def main():
 
     # Analyze each symbol
     for symbol in symbols:
+        stock_data = fetch_stock_data(symbol, "1d")
+        if stock_data.empty:
+            continue
+
+        # Calculate indicators
+        stock_data, monthly_pivot = calculate_indicators(stock_data)
+
+        # Get the latest price and signals
         latest_price = fetch_latest_price(symbol)
         analysis = analyze_stock(symbol, timeframes)
-        row = {"Symbol": symbol, "Price": latest_price, "60m_Signal": analysis.get("60m", "Error")}
+
+        row = {
+            "Symbol": symbol,
+            "Price": latest_price,
+            "1D Signal": analysis.get("1d", "Error"),
+            "5D Signal": analysis.get("5d", "Error"),
+            "EMA_21": stock_data['EMA_21'].iloc[-1] if not stock_data.empty else None,
+            "EMA_50": stock_data['EMA_50'].iloc[-1] if not stock_data.empty else None,
+            "EMA_200": stock_data['EMA_200'].iloc[-1] if not stock_data.empty else None,
+            "Monthly Pivot": monthly_pivot
+        }
         rows.append(row)
 
         # Store the current signal
-        current_signals[symbol] = analysis.get("60m", "Error")
+        current_signals[symbol] = analysis.get("1d", "Error")
 
         # Compare current signals with last signals
         current_signal = current_signals[symbol]
@@ -183,62 +262,10 @@ def main():
 
     # Display the current signals in the Streamlit app
     df = pd.DataFrame(rows)
-    st.write("Current 60-Minute Signals for Trading")
+    st.write("Current Signals and Indicators")
     st.dataframe(df)
 
     # Save the current signals for the next comparison
-    save_signals(current_signals)
-
-
-
-    # Analyze each symbol
-    for symbol in symbols:
-        latest_price = fetch_latest_price(symbol)
-        analysis = analyze_stock(symbol, timeframes)
-        row = {"Symbol": symbol, "Price": latest_price, "60m_Signal": analysis.get("60m", "Error")}
-        rows.append(row)
-
-        # Store the current signal
-        current_signals[symbol] = analysis.get("60m", "Error")
-
-        # Compare current signals with last signals
-        current_signal = current_signals[symbol]
-        last_signal = last_signals.get(symbol, "Neutral")  # Default to "Neutral" if no previous data
-
-        # Detect signal change
-        if current_signal != last_signal:
-            trend_changes.append(f"Signal change for {symbol}: {last_signal} -> {current_signal}")
-
-    # Send to Discord only if there are trend changes
-    if trend_changes:
-        message = "\n".join(trend_changes)
-        table = df_to_markdown(pd.DataFrame(rows))  # Convert DataFrame to markdown
-        send_to_discord(message, table)
-        st.write("Changes sent to Discord.")
-    else:
-        st.write("No trend changes detected. Skipping Discord update.")
-
-    # Display the current signals in the Streamlit app
-    df = pd.DataFrame(rows)
-    st.write("Current 60-Minute Signals for Trading")
-    st.dataframe(df)
-
-    # Save the current signals for the next comparison
-    save_signals(current_signals)
-
-
-        
-    # Send the message to Discord every time
-    message = "\n".join(trend_changes) if trend_changes else "No trend changes"
-    table = df_to_markdown(pd.DataFrame(rows))  # Convert the DataFrame to markdown format
-    send_to_discord(message, table)
-
-    # Highlight stocks where the trend changed
-    df = pd.DataFrame(rows)
-    st.write("Current 60-Minute Signals for Trading")
-    st.dataframe(df)
-
-    # Update the last signals file
     save_signals(current_signals)
 
 if __name__ == "__main__":
