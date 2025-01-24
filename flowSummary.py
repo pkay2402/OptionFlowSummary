@@ -50,7 +50,7 @@ def summarize_flows(df, symbol, call_put=None, expiration=None):
     
     # Summarize by expiration, strike price, call/put, and total volume
     summary = (
-        filtered_df.groupby(['Symbol', 'Expiration', 'Strike Price', 'Call/Put'])
+        filtered_df.groupby(['Symbol', 'Expiration', 'Strike Price', 'Call/Put','Last Price'])
         .agg({'Volume': 'sum'})
         .reset_index()
     )
