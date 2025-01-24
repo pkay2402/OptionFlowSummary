@@ -279,3 +279,10 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+import streamlit as st
+
+def run():
+    st.title("Momentum ETF")
+    # Add your Momentum ETF logic here
+    st.write("This is the Momentum ETF application.")
