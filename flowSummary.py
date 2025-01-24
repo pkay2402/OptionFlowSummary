@@ -4,28 +4,37 @@ from io import StringIO
 from datetime import datetime
 import streamlit as st
 
-def fetch_data(url):
-    try:
-        # Fetch the CSV data from the URL
-        response = requests.get(url)
-        response.raise_for_status()  # Raise an error if the request fails
-        
-        # Read the CSV content into a pandas DataFrame
-        csv_data = StringIO(response.text)
-        df = pd.read_csv(csv_data)
+def fetch_data_from_urls(urls):
+    all_data = pd.DataFrame()  # Initialize an empty DataFrame to combine data from all URLs
+    for url in urls:
+        try:
+            # Fetch the CSV data from the URL
+            response = requests.get(url)
+            response.raise_for_status()  # Raise an error if the request fails
+            
+            # Check if the response is a CSV file
+            if 'text/csv' in response.headers.get('Content-Type', ''):
+                # Read the CSV content into a pandas DataFrame
+                csv_data = StringIO(response.text)
+                df = pd.read_csv(csv_data)
 
-        # Filter out records with Volume less than 400
-        df = df[df['Volume'] >= 100]
+                # Filter out records with Volume less than 100
+                df = df[df['Volume'] >= 100]
 
-        # Convert Expiration to datetime and filter out records with current date
-        df['Expiration'] = pd.to_datetime(df['Expiration'])
-        current_date = datetime.now().date()
-        df = df[df['Expiration'].dt.date != current_date]
+                # Convert Expiration to datetime and filter out records with the current date
+                df['Expiration'] = pd.to_datetime(df['Expiration'])
+                current_date = datetime.now().date()
+                df = df[df['Expiration'].dt.date != current_date]
 
-        return df
-    except Exception as e:
-        st.error(f"Error fetching or processing data: {e}")
-        return pd.DataFrame()
+                # Append the current DataFrame to the all_data DataFrame
+                all_data = pd.concat([all_data, df], ignore_index=True)
+            else:
+                st.warning(f"Data from {url} is not in CSV format. Skipping...")
+
+        except Exception as e:
+            st.error(f"Error fetching or processing data from {url}: {e}")
+    
+    return all_data
 
 def summarize_flows(df, symbol, call_put=None, expiration=None):
     # Filter by selected symbol
@@ -53,12 +62,18 @@ def summarize_flows(df, symbol, call_put=None, expiration=None):
 # Streamlit UI
 st.title("Options Flow Analyzer")
 
-# Input: URL of the CBOE data
-csv_url = "https://www.cboe.com/us/options/market_statistics/symbol_data/csv/?mkt=cone"
-st.write("Fetching data from:", csv_url)
+# Input: List of URLs
+urls = [
+    "https://www.cboe.com/us/options/market_statistics/symbol_data/csv/?mkt=cone",
+    "https://www.cboe.com/us/options/market_statistics/symbol_data/csv/?mkt=opt",
+    "https://www.cboe.com/us/options/market_statistics/symbol_data/csv/?mkt=ctwo",
+    "https://www.cboe.com/us/options/market_statistics/symbol_data/csv/?mkt=exo"
+]
 
-# Fetch data
-data = fetch_data(csv_url)
+st.write("Fetching data from the following URLs:", urls)
+
+# Fetch data from all URLs
+data = fetch_data_from_urls(urls)
 
 if not data.empty:
     # Show available symbols for filtering
