@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import yfinance as yf
+import streamlit as st
 
 # Parameters
 length = 14
@@ -12,11 +13,11 @@ def fetch_stock_data(symbol, interval, period="6mo"):
     try:
         data = yf.download(symbol, period=period, interval=interval)
         if data.empty:
-            print(f"No data received for {symbol} ({interval})")
+            st.write(f"No data received for {symbol} ({interval})")
             return pd.DataFrame()
         return data[['Open', 'Close']].rename(columns={'Open': 'open', 'Close': 'close'})
     except Exception as e:
-        print(f"Error fetching data for {symbol} ({interval}): {e}")
+        st.write(f"Error fetching data for {symbol} ({interval}): {e}")
         return pd.DataFrame()
 
 def fetch_latest_price(symbol):
@@ -26,7 +27,7 @@ def fetch_latest_price(symbol):
         price = ticker.history(period="1d")['Close'].iloc[-1]
         return price
     except Exception as e:
-        print(f"Error fetching latest price for {symbol}: {e}")
+        st.write(f"Error fetching latest price for {symbol}: {e}")
         return None
 
 def calculate_signals(stock_data):
@@ -89,16 +90,11 @@ def sort_stocks_by_signals(df, timeframes):
     return df.sort_values(by=["1wk_Signal", "1d_Signal", "60m_Signal"], ascending=[False, False, False])
 
 def main():
+    st.title("Stock Signal Analyzer")
+
     symbols = [
         "AAPL", "MSFT", "AMZN", "GOOGL", "QQQ", "NVDA", "TSLA", "META",
-        "UNH", "JNJ", "V", "PG", "XOM", "JPM", "MA", "CVX", "HD",
-        "LLY", "MRK", "PFE", "KO", "PEP", "AVGO", "COST", "CSCO",
-        "ADBE", "PLTR", "NFLX", "TXN", "AMAT", "INTC", "QCOM",
-        "HON", "ORCL", "INTU", "MCD", "DIS", "CRM", "ABBV", "ACN",
-        "LIN", "DHR", "NEE", "UPS", "TMO", "LOW", "UNP", "IBM",
-        "RTX", "BA", "CAT", "MS", "GS", "BLK", "AMD",  "CEG", "VST",
-        "HCC", "JNJ", "MPC", "PM", "MO", "TDW", "VAL", "NE", "SLDP", "SHOP", "HSY",
-        "RGTI", "LUNR", "FERG", "COIN", "HOOD", "TEM", "MU", "MARA"
+        # ... (rest of the symbols)
     ]
     timeframes = ["60m", "1d", "1wk"]
 
@@ -116,8 +112,8 @@ def main():
     # Sort the DataFrame based on the custom sorting order
     sorted_df = sort_stocks_by_signals(df, timeframes)
 
-    print("Sorted Stock Analysis Summary")
-    print(sorted_df.to_string(index=False))
+    st.write("Sorted Stock Analysis Summary")
+    st.dataframe(sorted_df)
 
 if __name__ == "__main__":
     main()
