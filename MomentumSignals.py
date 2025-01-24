@@ -22,6 +22,8 @@ def calculate_ema(data, period):
     return data.ewm(span=period, adjust=False).mean()
 
 # Calculate Monthly Pivot Points
+from datetime import datetime
+
 def calculate_monthly_pivot(data):
     """Calculates the monthly pivot based on High, Low, and Close prices for the current month."""
     # Flatten MultiIndex columns
@@ -62,6 +64,10 @@ def calculate_monthly_pivot(data):
     pivot = (high + low + close) / 3
     return pivot
 
+
+
+
+
 def fetch_stock_data(symbol, interval, period="6mo"):
     """Fetches stock data using yfinance directly."""
     try:
@@ -69,17 +75,12 @@ def fetch_stock_data(symbol, interval, period="6mo"):
         if data.empty:
             st.write(f"No data received for {symbol} ({interval})")
             return pd.DataFrame()
-        
         # Ensure all necessary columns are present
-        required_columns = ['Open', 'High', 'Low', 'Close', 'Volume']
-        for col in required_columns:
-            if col not in data.columns:
-                raise KeyError(f"Missing required column: {col} in data for {symbol}")
-        
-        return data[required_columns]
+        return data[['Open', 'High', 'Low', 'Close', 'Volume']]
     except Exception as e:
         st.write(f"Error fetching data for {symbol} ({interval}): {e}")
         return pd.DataFrame()
+
 
 def fetch_latest_price(symbol):
     """Fetches the latest price of the stock."""
@@ -130,22 +131,10 @@ def analyze_stock(symbol, timeframes):
 
 def calculate_indicators(data):
     """Calculates EMA and Monthly Pivot values."""
-    if data.empty:
-        raise ValueError("Data is empty. Cannot calculate indicators.")
-
-    if 'Close' not in data.columns:
-        raise KeyError("Missing 'Close' column in the data. Cannot calculate EMA.")
-
     data['EMA_21'] = calculate_ema(data['Close'], 21)
     data['EMA_50'] = calculate_ema(data['Close'], 50)
     data['EMA_200'] = calculate_ema(data['Close'], 200)
-
-    try:
-        monthly_pivot = calculate_monthly_pivot(data)
-    except ValueError as e:
-        monthly_pivot = None
-        st.write(f"Could not calculate monthly pivot: {e}")
-
+    monthly_pivot = calculate_monthly_pivot(data)
     return data, monthly_pivot
 
 # File to store last signals
@@ -214,10 +203,8 @@ def main():
 
     # Symbols and timeframe
     symbols = [
-        "AAPL", "AMD", "AMZN", "AVGO", "COIN", "DIA", "GOOGL", "IWM", "META", 
-        "MSFT", "NVDA", "PANW", "QQQ", "SPY", "TSLA", "TSM", "UNH", "UVXY"
+        "AAPL", "MSFT", "AMZN", "GOOGL", "QQQ", "NVDA", "TSLA", "META", "SPY", "UVXY", "DIA", "IWM", "COIN", "UNH"
     ]
-
     timeframes = ["1d", "5d"]
 
     # Data storage
@@ -234,16 +221,8 @@ def main():
         if stock_data.empty:
             continue
 
-        # Debugging: Print the first few rows of stock_data
-        st.write(f"Data for {symbol}:")
-        st.write(stock_data.head())
-
         # Calculate indicators
-        try:
-            stock_data, monthly_pivot = calculate_indicators(stock_data)
-        except Exception as e:
-            st.write(f"Error calculating indicators for {symbol}: {e}")
-            continue
+        stock_data, monthly_pivot = calculate_indicators(stock_data)
 
         # Get the latest price and signals
         latest_price = fetch_latest_price(symbol)
@@ -278,14 +257,17 @@ def main():
     st.dataframe(df)
 
     # Add a manual button to send the table to Discord
+    # Add a manual button to send the table to Discord
     if st.button("Send Table to Discord"):
-        # Convert the DataFrame to markdown format
-        table = df_to_markdown(df)
-        message = "Manual Push of Signals and Indicators to Discord"
-        send_to_discord(message, table)
-        st.write("Table sent to Discord manually.")
+    # Convert the DataFrame to markdown format
+     table = df_to_markdown(df)
+     message = "Manual Push of Signals and Indicators to Discord"
+     send_to_discord(message, table)
+     st.write("Table sent to Discord manually.")
+
 
     # Save the current signals for the next comparison
+    save_signals(current_signals)
 
 
 if __name__ == "__main__":
