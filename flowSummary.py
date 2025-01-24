@@ -105,3 +105,7 @@ if not data.empty:
             file_name=f"{selected_symbol}_summary.csv",
             mime="text/csv"
         )
+def run():
+    st.title("Flow Summary")
+    # Add your Flow Summary logic here
+    st.write("This is the Flow Summary application.")
