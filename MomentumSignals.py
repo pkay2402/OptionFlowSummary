@@ -15,7 +15,7 @@ calc_length = 5
 smooth_length = 3
 
 # Webhook URL for Discord
-DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1332242383458406401/6KXAsHFsvTKgDZyDimQ_ncrBx9vePgsOYxSRjga0mK-Zg2m404r65zzqdyL1bKCQRwVO"
+DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1332367135023956009/8HH_RiKnSP7R7l7mtFHOB8kJi7ATt0TKZRrh35D82zycKC7JrFVSMpgJUmHrnDQ4mQRw"
 
 def fetch_stock_data(symbol, interval, period="6mo"):
     """Fetches stock data using yfinance directly."""
