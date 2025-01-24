@@ -118,11 +118,11 @@ def analyze_stock(symbol, timeframes):
         else:
             buy_signals, sell_signals = calculate_signals(stock_data)
             if not buy_signals.empty and buy_signals.iloc[-1]:
-                results[timeframe] = "Buy"
+                results[timeframe] = "B"
             elif not sell_signals.empty and sell_signals.iloc[-1]:
-                results[timeframe] = "Sell"
+                results[timeframe] = "S"
             else:
-                results[timeframe] = "Neutral"
+                results[timeframe] = "N"
     return results
 
 def calculate_indicators(data):
@@ -195,11 +195,11 @@ def main():
         return
 
     st.write(f"App refreshed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")  # Log refresh time
-    st.title("Stock Summary with 1D and 5D timeframe")
+    st.title("Stock Summary with 1D and 5D")
 
     # Symbols and timeframe
     symbols = [
-        "AAPL", "MSFT","TSM","AVGO","AMD","IBIT", "AMZN", "GOOGL", "QQQ", "NVDA", "TSLA", "META", "SPY", "UVXY", "DIA", "IWM", "COIN", "UNH"
+        "AAPL", "MSFT","TSM","AVGO", "AMZN", "GOOGL", "QQQ", "NVDA", "TSLA", "META", "SPY", "UVXY", "DIA", "IWM", "COIN", "UNH"
     ]
     timeframes = ["1d", "5d"]
 
@@ -227,12 +227,12 @@ def main():
         row = {
             "Symbol": symbol,
             "Price": latest_price,
-            "1D Signal": analysis.get("1d", "Error"),
-            "5D Signal": analysis.get("5d", "Error"),
+            "1D": analysis.get("1d", "Error"),
+            "5D": analysis.get("5d", "Error"),
             "EMA_21": stock_data['EMA_21'].iloc[-1] if not stock_data.empty else None,
             "EMA_50": stock_data['EMA_50'].iloc[-1] if not stock_data.empty else None,
             "EMA_200": stock_data['EMA_200'].iloc[-1] if not stock_data.empty else None,
-            "Monthly Pivot": monthly_pivot
+            "Monthly_Pivot": monthly_pivot
         }
         rows.append(row)
 
