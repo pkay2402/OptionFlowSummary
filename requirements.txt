@@ -1,2 +1,2 @@
-yfinance==0.2.4  # Use the version you need
+yfinance==0.2.52  # Use the version you need
 streamlit
