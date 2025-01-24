@@ -129,25 +129,25 @@ def is_market_open():
     return False
 
 def main():
+    # Refresh the app every 15 minutes (900000 milliseconds)
+    st_autorefresh(interval=900000, key="data_refresh")
+
     # Check if the market is open
     if not is_market_open():
         st.write("Market is currently closed. The app will resume during market hours.")
         return
 
-    # Refresh the app every 15 minutes (900000 milliseconds)
-    st_autorefresh(interval=900000, key="data_refresh")
-
+    st.write(f"App refreshed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")  # Log refresh time
     st.title("60-Minute Signal Changes for Trading")
 
     symbols = [
-        "AAPL", "MSFT", "AMZN", "GOOGL", "QQQ", "NVDA", "TSLA", "META","SPY","UVXY","DIA","IWM","COIN","UNH"
-        # Add more symbols if needed
+        "AAPL", "MSFT", "AMZN", "GOOGL", "QQQ", "NVDA", "TSLA", "META", "SPY", "UVXY", "DIA", "IWM", "COIN", "UNH"
     ]
-    timeframes = ["60m"]  # Only focus on 60-minute timeframe
+    timeframes = ["60m"]
 
     rows = []
-    trend_changes = []  # List to store stocks with trend changes
-    current_signals = {}  # Dictionary to store the current signals
+    trend_changes = []
+    current_signals = {}
 
     for symbol in symbols:
         latest_price = fetch_latest_price(symbol)
@@ -155,18 +155,28 @@ def main():
         row = {"Symbol": symbol, "Price": latest_price, "60m_Signal": analysis.get("60m", "Error")}
         rows.append(row)
 
-        # Store current signal for the symbol
         current_signals[symbol] = analysis.get("60m", "Error")
 
-        # Load last signals
         last_signals = load_signals()
-
-        # Check if trend changed
         current_signal = current_signals[symbol]
         last_signal = last_signals.get(symbol, "Neutral")
 
         if current_signal != last_signal:
             trend_changes.append(f"Signal change for {symbol}: {last_signal} -> {current_signal}")
+
+    if trend_changes:
+        message = "\n".join(trend_changes)
+        table = df_to_markdown(pd.DataFrame(rows))
+        send_to_discord(message, table)
+    else:
+        st.write("No trend changes detected. Skipping Discord update.")
+
+    df = pd.DataFrame(rows)
+    st.write("Current 60-Minute Signals for Trading")
+    st.dataframe(df)
+
+    save_signals(current_signals)
+
         
     # Send the message to Discord every time
     message = "\n".join(trend_changes) if trend_changes else "No trend changes"
