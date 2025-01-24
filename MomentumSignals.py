@@ -203,8 +203,10 @@ def main():
 
     # Symbols and timeframe
     symbols = [
-        "AAPL", "MSFT", "AMZN", "GOOGL", "QQQ", "NVDA", "TSLA", "META", "SPY", "UVXY", "DIA", "IWM", "COIN", "UNH"
+    "AAPL", "AMD", "AMZN", "AVGO", "COIN", "DIA", "GOOGL", "IWM", "META", 
+    "MSFT", "NVDA", "PANW", "QQQ", "SPY", "TSLA", "TSM", "UNH", "UVXY"
     ]
+
     timeframes = ["1d", "5d"]
 
     # Data storage
