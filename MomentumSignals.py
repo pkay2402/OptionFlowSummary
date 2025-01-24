@@ -140,7 +140,7 @@ def main():
     st.title("60-Minute Signal Changes for Trading")
 
     symbols = [
-        "AAPL", "MSFT", "AMZN", "GOOGL", "QQQ", "NVDA", "TSLA", "META","SPY","UVXY","DIA","IWM","COIN"
+        "AAPL", "MSFT", "AMZN", "GOOGL", "QQQ", "NVDA", "TSLA", "META","SPY","UVXY","DIA","IWM","COIN","UNH"
         # Add more symbols if needed
     ]
     timeframes = ["60m"]  # Only focus on 60-minute timeframe
