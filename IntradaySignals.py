@@ -116,6 +116,11 @@ def main():
         print(f"Checked signals at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         time.sleep(900)  # Run every 15 minutes
 
+def run():
+    st.title("Intraday Signals")
+    # Add your Intraday Signals logic here
+    st.write("This is the Intraday Signals application.")
+
 
 if __name__ == "__main__":
     main()
