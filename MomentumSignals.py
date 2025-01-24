@@ -260,10 +260,10 @@ def main():
     # Add a manual button to send the table to Discord
     if st.button("Send Table to Discord"):
     # Convert the DataFrame to markdown format
-    table = df_to_markdown(df)
-    message = "Manual Push of Signals and Indicators to Discord"
-    send_to_discord(message, table)
-    st.write("Table sent to Discord manually.")
+     table = df_to_markdown(df)
+     message = "Manual Push of Signals and Indicators to Discord"
+     send_to_discord(message, table)
+     st.write("Table sent to Discord manually.")
 
 
     # Save the current signals for the next comparison
