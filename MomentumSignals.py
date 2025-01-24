@@ -172,6 +172,42 @@ def main():
         if current_signal != last_signal:
             trend_changes.append(f"Signal change for {symbol}: {last_signal} -> {current_signal}")
 
+    # Only send to Discord if there are trend changes
+    if trend_changes:
+        message = "\n".join(trend_changes)
+        table = df_to_markdown(pd.DataFrame(rows))  # Convert DataFrame to markdown
+        send_to_discord(message, table)
+        st.write("Changes sent to Discord.")
+    else:
+        st.write("No trend changes detected. Skipping Discord update.")
+
+    # Display the current signals in the Streamlit app
+    df = pd.DataFrame(rows)
+    st.write("Current 60-Minute Signals for Trading")
+    st.dataframe(df)
+
+    # Save the current signals for the next comparison
+    save_signals(current_signals)
+
+
+    # Analyze each symbol
+    for symbol in symbols:
+        latest_price = fetch_latest_price(symbol)
+        analysis = analyze_stock(symbol, timeframes)
+        row = {"Symbol": symbol, "Price": latest_price, "60m_Signal": analysis.get("60m", "Error")}
+        rows.append(row)
+
+        # Store the current signal
+        current_signals[symbol] = analysis.get("60m", "Error")
+
+        # Compare current signals with last signals
+        current_signal = current_signals[symbol]
+        last_signal = last_signals.get(symbol, "Neutral")  # Default to "Neutral" if no previous data
+
+        # Detect signal change
+        if current_signal != last_signal:
+            trend_changes.append(f"Signal change for {symbol}: {last_signal} -> {current_signal}")
+
     # Send to Discord only if there are trend changes
     if trend_changes:
         message = "\n".join(trend_changes)
