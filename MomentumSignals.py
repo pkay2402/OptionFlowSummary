@@ -190,6 +190,7 @@ def main():
     save_signals(current_signals)
 
 
+
     # Analyze each symbol
     for symbol in symbols:
         latest_price = fetch_latest_price(symbol)
