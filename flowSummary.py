@@ -3,137 +3,238 @@ import requests
 from io import StringIO
 from datetime import datetime
 import streamlit as st
+from typing import List, Optional
+import logging
 
-def fetch_data_from_urls(urls):
-    all_data = pd.DataFrame()  # Initialize an empty DataFrame to combine data from all URLs
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def validate_csv_content_type(response: requests.Response) -> bool:
+    """Validate if the response content type is CSV."""
+    return 'text/csv' in response.headers.get('Content-Type', '')
+
+def apply_filters(df: pd.DataFrame) -> pd.DataFrame:
+    """Apply filters to the DataFrame."""
+    df = df[df['Volume'] >= 100]
+    df['Expiration'] = pd.to_datetime(df['Expiration'])
+    df = df[df['Expiration'].dt.date >= datetime.now().date()]
+    return df
+
+def fetch_data_from_url(url: str) -> Optional[pd.DataFrame]:
+    """Fetch and process data from a single URL."""
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+
+        if validate_csv_content_type(response):
+            csv_data = StringIO(response.text)
+            df = pd.read_csv(csv_data)
+            return apply_filters(df)
+        else:
+            logger.warning(f"Data from {url} is not in CSV format. Skipping...")
+    except Exception as e:
+        logger.error(f"Error fetching or processing data from {url}: {e}")
+    return None
+
+def fetch_data_from_urls(urls: List[str]) -> pd.DataFrame:
+    """Fetch and combine data from multiple CSV URLs into a single DataFrame."""
+    data_frames = []
     for url in urls:
-        try:
-            # Fetch the CSV data from the URL
-            response = requests.get(url)
-            response.raise_for_status()  # Raise an error if the request fails
-            
-            # Check if the response is a CSV file
-            if 'text/csv' in response.headers.get('Content-Type', ''):
-                # Read the CSV content into a pandas DataFrame
-                csv_data = StringIO(response.text)
-                df = pd.read_csv(csv_data)
+        df = fetch_data_from_url(url)
+        if df is not None:
+            data_frames.append(df)
+    return pd.concat(data_frames, ignore_index=True) if data_frames else pd.DataFrame()
 
-                # Filter out records with Volume less than 100
-                df = df[df['Volume'] >= 100]
-
-                # Convert Expiration to datetime and filter out records with the current date
-                df['Expiration'] = pd.to_datetime(df['Expiration'])
-                current_date = datetime.now().date()
-                df = df[df['Expiration'].dt.date != current_date]
-
-                # Append the current DataFrame to the all_data DataFrame
-                all_data = pd.concat([all_data, df], ignore_index=True)
-            else:
-                st.warning(f"Data from {url} is not in CSV format. Skipping...")
-
-        except Exception as e:
-            st.error(f"Error fetching or processing data from {url}: {e}")
+def filter_risk_reversal(df: pd.DataFrame, exclude_symbols: List[str], strike_proximity: int = 5) -> pd.DataFrame:
+    """
+    Filter for Risk Reversal trades by grouping calls and puts with similar strike prices.
     
-    return all_data
-
-def summarize_whale_transactions(df, selected_symbol=None, exclude_spx=True):
-    # Exclude SPX and SPXW by default
-    if exclude_spx:
-        df = df[~df['Symbol'].isin(['SPX', 'SPXW'])]
+    Args:
+        df: Input DataFrame containing options data.
+        exclude_symbols: List of symbols to exclude.
+        strike_proximity: Maximum allowed difference between call and put strike prices.
     
-    # Calculate Whale transactions (Volume * Last Price > 5 million)
+    Returns:
+        DataFrame with reshaped data for Risk Reversal trades.
+    """
+    if exclude_symbols:
+        df = df[~df['Symbol'].isin(exclude_symbols)]
+
+    # Separate calls and puts
+    calls = df[df['Call/Put'] == 'C']
+    puts = df[df['Call/Put'] == 'P']
+
+    # Merge calls and puts on Symbol and Expiration
+    merged = pd.merge(
+        calls, puts,
+        on=['Symbol', 'Expiration'],
+        suffixes=('_call', '_put')
+    )
+
+    # Filter for strike price proximity and volume
+    merged = merged[
+        (abs(merged['Strike Price_call'] - merged['Strike Price_put']) <= strike_proximity) &
+        (merged['Volume_call'] >= 3000) &
+        (merged['Volume_put'] >= 3000)
+    ]
+
+    # Select relevant columns
+    columns_to_keep = [
+        'Symbol', 'Expiration',
+        'Strike Price_call', 'Volume_call', 'Last Price_call',
+        'Strike Price_put', 'Volume_put', 'Last Price_put'
+    ]
+    merged = merged[columns_to_keep]
+
+    # Drop duplicates based on Symbol, Expiration, and Strike Prices
+    merged = merged.drop_duplicates(subset=[
+        'Symbol', 'Expiration', 'Strike Price_call', 'Strike Price_put'
+    ])
+
+    # Reshape the data to group calls and puts vertically
+    reshaped_data = []
+    for _, row in merged.iterrows():
+        # Append call data
+        reshaped_data.append({
+            'Symbol': row['Symbol'],
+            'Type': 'Call',
+            'Expiration': row['Expiration'],
+            'Strike Price': row['Strike Price_call'],
+            'Volume': row['Volume_call'],
+            'Last Price': row['Last Price_call']
+        })
+        # Append put data
+        reshaped_data.append({
+            'Symbol': row['Symbol'],
+            'Type': 'Put',
+            'Expiration': row['Expiration'],
+            'Strike Price': row['Strike Price_put'],
+            'Volume': row['Volume_put'],
+            'Last Price': row['Last Price_put']
+        })
+
+    # Convert reshaped data to DataFrame
+    reshaped_df = pd.DataFrame(reshaped_data)
+
+    # Drop duplicates in the reshaped DataFrame
+    reshaped_df = reshaped_df.drop_duplicates(subset=[
+        'Symbol', 'Expiration', 'Strike Price', 'Type'
+    ])
+
+    return reshaped_df
+
+def summarize_transactions(df: pd.DataFrame, whale_filter: bool = False, exclude_symbols: List[str] = None) -> pd.DataFrame:
+    """Summarize transactions from the given DataFrame."""
+    if exclude_symbols:
+        df = df[~df['Symbol'].isin(exclude_symbols)]
+
     df['Transaction Value'] = df['Volume'] * df['Last Price'] * 100
-    whale_transactions = df[df['Transaction Value'] > 5_000_000]
 
-    # If a symbol is selected, filter by it
-    if selected_symbol:
-        whale_transactions = whale_transactions[whale_transactions['Symbol'] == selected_symbol]
+    if whale_filter:
+        df = df[df['Transaction Value'] > 5_000_000]
 
-    # Summarize whale transactions
     summary = (
-        whale_transactions.groupby(['Symbol', 'Expiration', 'Strike Price', 'Call/Put', 'Last Price'])
+        df.groupby(['Symbol', 'Expiration', 'Strike Price', 'Call/Put', 'Last Price'])
         .agg({'Volume': 'sum', 'Transaction Value': 'sum'})
         .reset_index()
     )
-    summary = summary.sort_values(by='Transaction Value', ascending=False)
-    return summary
+    return summary.sort_values(by='Transaction Value', ascending=False)
 
-# Streamlit UI
-st.title("Options Flow Analyzer")
+@st.cache_data
+def load_data(urls: List[str]) -> pd.DataFrame:
+    """Load and cache data from URLs."""
+    return fetch_data_from_urls(urls)
 
-# Input: List of URLs
-urls = [
-    "https://www.cboe.com/us/options/market_statistics/symbol_data/csv/?mkt=cone",
-    "https://www.cboe.com/us/options/market_statistics/symbol_data/csv/?mkt=opt",
-    "https://www.cboe.com/us/options/market_statistics/symbol_data/csv/?mkt=ctwo",
-    "https://www.cboe.com/us/options/market_statistics/symbol_data/csv/?mkt=exo"
-]
+def run():
+    """Main function to run the Streamlit application."""
+    st.set_page_config(page_title="Flow Summary", layout="wide")
+    st.title("📊 Flow Summary")
 
-st.write("Fetching data from the following URLs:", urls)
-
-# Fetch data from all URLs
-data = fetch_data_from_urls(urls)
-
-if not data.empty:
-    # Add Whale Transaction filter
-    whale_option = st.checkbox("Show Whale Transactions Only")
-
-    if whale_option:
-        st.subheader("Whale Transactions")
-
-        # Option to exclude SPX and SPXW
-        exclude_spx = st.checkbox("Exclude SPX and SPXW (default)", value=True)
-
-        view_option = st.radio(
-            "Do you want to filter by a specific stock or see all stocks?",
-            options=["Specific Stock", "All Stocks"]
+    # Sidebar for filters and options
+    with st.sidebar:
+        st.header("Filters & Options")
+        whale_option = st.checkbox("Show Whale Transactions Only")
+        risk_reversal_option = st.checkbox("Show Risk Reversal Trades")
+        
+        # User input for excluded symbols
+        default_excluded_symbols = ["SPX", "SPXW", "VIX", "SPY"]
+        excluded_symbols = st.text_input(
+            "Enter symbols to exclude (comma-separated)",
+            value=", ".join(default_excluded_symbols)
         )
+        excluded_symbols = [s.strip() for s in excluded_symbols.split(",") if s.strip()]
 
-        if view_option == "Specific Stock":
-            # Show available symbols for filtering
+    # URLs for data fetching
+    urls = [
+        "https://www.cboe.com/us/options/market_statistics/symbol_data/csv/?mkt=cone",
+        "https://www.cboe.com/us/options/market_statistics/symbol_data/csv/?mkt=opt",
+        "https://www.cboe.com/us/options/market_statistics/symbol_data/csv/?mkt=ctwo",
+        "https://www.cboe.com/us/options/market_statistics/symbol_data/csv/?mkt=exo"
+    ]
+
+    # Fetch data with a progress spinner
+    with st.spinner("Fetching data..."):
+        data = load_data(urls)
+
+    if not data.empty:
+        # Use tabs for different views
+        tab1, tab2, tab3 = st.tabs(["Risk Reversal Trades", "Whale Transactions", "Options Flow Analysis"])
+
+        with tab1:
+            if risk_reversal_option:
+                st.subheader("Risk Reversal Trades")
+                risk_reversal_data = filter_risk_reversal(data, exclude_symbols=excluded_symbols)
+                st.dataframe(risk_reversal_data)
+
+                csv = risk_reversal_data.to_csv(index=False)
+                st.download_button(
+                    label="Download Risk Reversal Trades as CSV",
+                    data=csv,
+                    file_name="risk_reversal_trades.csv",
+                    mime="text/csv"
+                )
+            else:
+                st.info("Enable 'Show Risk Reversal Trades' in the sidebar to view this section.")
+
+        with tab2:
+            if whale_option:
+                st.subheader("Whale Transactions")
+                summary = summarize_transactions(data, whale_filter=True, exclude_symbols=excluded_symbols)
+                st.dataframe(summary)
+
+                csv = summary.to_csv(index=False)
+                st.download_button(
+                    label="Download Whale Transactions as CSV",
+                    data=csv,
+                    file_name="whale_transactions_summary.csv",
+                    mime="text/csv"
+                )
+            else:
+                st.info("Enable 'Show Whale Transactions Only' in the sidebar to view this section.")
+
+        with tab3:
+            st.subheader("Options Flow Analysis")
+
             symbols = sorted(data['Symbol'].unique())
             selected_symbol = st.selectbox("Select Symbol to Analyze", symbols)
-            summary = summarize_whale_transactions(data, selected_symbol, exclude_spx)
-            st.subheader(f"Whale Transactions for {selected_symbol}")
-        else:
-            # Show all whale transactions across all stocks
-            summary = summarize_whale_transactions(data, exclude_spx=exclude_spx)
-            st.subheader("Whale Transactions Across All Stocks")
+            symbol_data = data[data['Symbol'] == selected_symbol]
 
-        st.dataframe(summary)
+            strike_prices = sorted(symbol_data['Strike Price'].unique())
+            selected_strike_price = st.selectbox("Select Strike Price (Optional)", [None] + strike_prices)
 
-        # Option to download the summary
-        csv = summary.to_csv(index=False)
-        st.download_button(
-            label="Download Whale Transactions as CSV",
-            data=csv,
-            file_name="whale_transactions_summary.csv",
-            mime="text/csv"
-        )
-    else:
-        # Regular options flow analysis
-        st.subheader("Options Flow Analysis")
-        symbols = sorted(data['Symbol'].unique())
-        selected_symbol = st.selectbox("Select Symbol to Analyze", symbols)
+            call_put_options = ['C', 'P']
+            selected_call_put = st.radio("Select Call/Put (Optional)", [None] + call_put_options, horizontal=True)
 
-        # Optional filter for Call/Put
-        call_put_options = ['All', 'C', 'P']
-        selected_call_put = st.selectbox("Select Call/Put", call_put_options)
+            if selected_strike_price:
+                symbol_data = symbol_data[symbol_data['Strike Price'] == selected_strike_price]
 
-        # Optional filter for Expiration
-        expiration_dates = sorted(data['Expiration'].dt.date.unique())
-        selected_expiration = st.selectbox("Select Expiration Date", [None] + expiration_dates)
+            if selected_call_put:
+                symbol_data = symbol_data[symbol_data['Call/Put'] == selected_call_put]
 
-        # Apply filters and summarize
-        if selected_symbol:
-            if selected_call_put == 'All':
-                selected_call_put = None  # Set to None to filter out if "All" is selected
-            
-            summary = summarize_whale_transactions(data[data['Symbol'] == selected_symbol])
-            st.subheader(f"Summary of Flows for {selected_symbol}")
+            summary = summarize_transactions(symbol_data, whale_filter=False, exclude_symbols=excluded_symbols)
             st.dataframe(summary)
 
-            # Option to download the summary
             csv = summary.to_csv(index=False)
             st.download_button(
                 label="Download Summary as CSV",
@@ -141,3 +242,8 @@ if not data.empty:
                 file_name=f"{selected_symbol}_summary.csv",
                 mime="text/csv"
             )
+
+    st.write("This is the Flow Summary application.")
+
+if __name__ == "__main__":
+    run()
