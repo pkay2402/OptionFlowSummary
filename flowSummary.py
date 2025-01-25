@@ -36,27 +36,26 @@ def fetch_data_from_urls(urls):
     
     return all_data
 
-def summarize_flows(df, symbol, call_put=None, expiration=None):
-    # Filter by selected symbol
-    filtered_df = df[df['Symbol'] == symbol]
+def summarize_whale_transactions(df, selected_symbol=None, exclude_spx=True):
+    # Exclude SPX and SPXW by default
+    if exclude_spx:
+        df = df[~df['Symbol'].isin(['SPX', 'SPXW'])]
     
-    # Apply optional Call/Put filter
-    if call_put:
-        filtered_df = filtered_df[filtered_df['Call/Put'] == call_put]
-    
-    # Apply optional Expiration filter
-    if expiration:
-        filtered_df = filtered_df[filtered_df['Expiration'].dt.date == expiration]
-    
-    # Summarize by expiration, strike price, call/put, and total volume
+    # Calculate Whale transactions (Volume * Last Price > 5 million)
+    df['Transaction Value'] = df['Volume'] * df['Last Price'] * 100
+    whale_transactions = df[df['Transaction Value'] > 5_000_000]
+
+    # If a symbol is selected, filter by it
+    if selected_symbol:
+        whale_transactions = whale_transactions[whale_transactions['Symbol'] == selected_symbol]
+
+    # Summarize whale transactions
     summary = (
-        filtered_df.groupby(['Symbol', 'Expiration', 'Strike Price', 'Call/Put','Last Price'])
-        .agg({'Volume': 'sum'})
+        whale_transactions.groupby(['Symbol', 'Expiration', 'Strike Price', 'Call/Put', 'Last Price'])
+        .agg({'Volume': 'sum', 'Transaction Value': 'sum'})
         .reset_index()
     )
-
-    # Order by higher total volume
-    summary = summary.sort_values(by='Volume', ascending=False)
+    summary = summary.sort_values(by='Transaction Value', ascending=False)
     return summary
 
 # Streamlit UI
@@ -76,36 +75,69 @@ st.write("Fetching data from the following URLs:", urls)
 data = fetch_data_from_urls(urls)
 
 if not data.empty:
-    # Show available symbols for filtering
-    symbols = sorted(data['Symbol'].unique())
-    selected_symbol = st.selectbox("Select Symbol to Analyze", symbols)
+    # Add Whale Transaction filter
+    whale_option = st.checkbox("Show Whale Transactions Only")
 
-    # Optional filter for Call/Put
-    call_put_options = ['All', 'C', 'P']
-    selected_call_put = st.selectbox("Select Call/Put", call_put_options)
+    if whale_option:
+        st.subheader("Whale Transactions")
 
-    # Optional filter for Expiration
-    expiration_dates = sorted(data['Expiration'].dt.date.unique())
-    selected_expiration = st.selectbox("Select Expiration Date", [None] + expiration_dates)
+        # Option to exclude SPX and SPXW
+        exclude_spx = st.checkbox("Exclude SPX and SPXW (default)", value=True)
 
-    # Apply filters and summarize
-    if selected_symbol:
-        if selected_call_put == 'All':
-            selected_call_put = None  # Set to None to filter out if "All" is selected
-        
-        summary = summarize_flows(data, selected_symbol, selected_call_put, selected_expiration)
-        st.subheader(f"Summary of Flows for {selected_symbol}")
+        view_option = st.radio(
+            "Do you want to filter by a specific stock or see all stocks?",
+            options=["Specific Stock", "All Stocks"]
+        )
+
+        if view_option == "Specific Stock":
+            # Show available symbols for filtering
+            symbols = sorted(data['Symbol'].unique())
+            selected_symbol = st.selectbox("Select Symbol to Analyze", symbols)
+            summary = summarize_whale_transactions(data, selected_symbol, exclude_spx)
+            st.subheader(f"Whale Transactions for {selected_symbol}")
+        else:
+            # Show all whale transactions across all stocks
+            summary = summarize_whale_transactions(data, exclude_spx=exclude_spx)
+            st.subheader("Whale Transactions Across All Stocks")
+
         st.dataframe(summary)
 
         # Option to download the summary
         csv = summary.to_csv(index=False)
         st.download_button(
-            label="Download Summary as CSV",
+            label="Download Whale Transactions as CSV",
             data=csv,
-            file_name=f"{selected_symbol}_summary.csv",
+            file_name="whale_transactions_summary.csv",
             mime="text/csv"
         )
-def run():
-    st.title("Flow Summary")
-    # Add your Flow Summary logic here
-    st.write("This is the Flow Summary application.")
+    else:
+        # Regular options flow analysis
+        st.subheader("Options Flow Analysis")
+        symbols = sorted(data['Symbol'].unique())
+        selected_symbol = st.selectbox("Select Symbol to Analyze", symbols)
+
+        # Optional filter for Call/Put
+        call_put_options = ['All', 'C', 'P']
+        selected_call_put = st.selectbox("Select Call/Put", call_put_options)
+
+        # Optional filter for Expiration
+        expiration_dates = sorted(data['Expiration'].dt.date.unique())
+        selected_expiration = st.selectbox("Select Expiration Date", [None] + expiration_dates)
+
+        # Apply filters and summarize
+        if selected_symbol:
+            if selected_call_put == 'All':
+                selected_call_put = None  # Set to None to filter out if "All" is selected
+            
+            summary = summarize_whale_transactions(data[data['Symbol'] == selected_symbol])
+            st.subheader(f"Summary of Flows for {selected_symbol}")
+            st.dataframe(summary)
+
+            # Option to download the summary
+            csv = summary.to_csv(index=False)
+            st.download_button(
+                label="Download Summary as CSV",
+                data=csv,
+                file_name=f"{selected_symbol}_summary.csv",
+                mime="text/csv"
+            )
