@@ -17,10 +17,20 @@ POLL_INTERVAL = 900  # 15 minutes in seconds
 SENDER_EMAIL = "alerts@thinkorswim.com"
 
 # Keywords to search for in email subjects
-KEYWORDS = ["tmo_Short", "tmo_long", "Long_IT_volume","Short_IT_volume","bull_Daily_sqz","bear_Daily_sqz","A+Bull_30m"]  # Add more keywords as needed
+KEYWORDS = ["A+Bull_30m","tmo_Short", "tmo_long", "Long_IT_volume","Short_IT_volume","bull_Daily_sqz","bear_Daily_sqz"]  # Add more keywords as needed
 
 # Track processed email IDs to avoid duplicates
 processed_email_ids = set()
+
+def get_spy_qqq_prices():
+    """Fetch the latest closing prices for SPY and QQQ."""
+    spy = yf.Ticker("SPY")
+    qqq = yf.Ticker("QQQ")
+    
+    spy_price = round(spy.history(period="1d")['Close'].iloc[-1], 2)
+    qqq_price = round(qqq.history(period="1d")['Close'].iloc[-1], 2)
+    
+    return spy_price, qqq_price
 
 def extract_stock_symbols_from_email(email_address, password, sender_email, keyword):
     try:
@@ -119,6 +129,20 @@ def fetch_stock_prices(df):
 def main():
     st.title("Thinkorswim Alerts Analyzer")
     st.write("This app polls your email for Thinkorswim alerts and analyzes stock data for different keywords.")
+
+    # Fetch SPY and QQQ prices
+    spy_price, qqq_price = get_spy_qqq_prices()
+
+    # Display SPY and QQQ prices with a refresh button
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col1:
+        st.metric("SPY Latest Close Price", f"${spy_price}")
+    with col2:
+        st.metric("QQQ Latest Close Price", f"${qqq_price}")
+    with col3:
+        if st.button("Refresh Prices"):
+            spy_price, qqq_price = get_spy_qqq_prices()
+            st.experimental_rerun()  # Refresh the app to update prices
 
     if st.button("Poll Emails and Analyze"):
         with st.spinner("Polling emails and analyzing data..."):
