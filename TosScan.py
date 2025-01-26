@@ -1,5 +1,5 @@
 import streamlit as st
-from streamlit_extras.buy_me_a_coffee import button  # Import the Buy Me a Coffee button
+from streamlit_extras.buy_me_a_coffee import button
 import imaplib
 import email
 import re
@@ -22,6 +22,17 @@ KEYWORDS = ["A+Bull_30m","tmo_Short", "tmo_long", "Long_IT_volume","Short_IT_vol
 
 # Track processed email IDs to avoid duplicates
 processed_email_ids = set()
+
+# Tooltip descriptions for each keyword
+TOOLTIPS = {
+    "A+Bull_30m": "This scan identifies bullish setups on a 30-minute chart.",
+    "tmo_Short": "This scan identifies short-term overbought conditions for potential short opportunities.",
+    "tmo_long": "This scan identifies short-term oversold conditions for potential long opportunities.",
+    "Long_IT_volume": "This scan looks for stocks with increasing volume and bullish intraday trends.",
+    "Short_IT_volume": "This scan looks for stocks with increasing volume and bearish intraday trends.",
+    "bull_Daily_sqz": "This scan identifies stocks in a bullish squeeze on the daily chart.",
+    "bear_Daily_sqz": "This scan identifies stocks in a bearish squeeze on the daily chart.",
+}
 
 def get_spy_qqq_prices():
     """Fetch the latest closing prices for SPY and QQQ."""
@@ -129,7 +140,7 @@ def fetch_stock_prices(df):
 
 def main():
     st.title("Thinkorswim Alerts Analyzer")
-    st.write("This app polls your email for Thinkorswim alerts and analyzes stock data for different keywords.")
+    st.write("This app polls your Thinkorswim alerts and analyzes stock data for different keywords.")
 
     # Add Buy Me a Coffee button using streamlit-extras
     button(username="tosalerts33", floating=False, width=221)
@@ -160,7 +171,42 @@ def main():
                     if idx < len(KEYWORDS):  # Check if there's a keyword for this column
                         keyword = KEYWORDS[idx]
                         with cols[col]:  # Use the corresponding column
-                            st.header(f"{keyword.upper()} Alerts")
+                            # Add a tooltip for the keyword
+                            st.markdown(
+                                f"""
+                                <style>
+                                .tooltip {{
+                                    position: relative;
+                                    display: inline-block;
+                                }}
+                                .tooltip .tooltiptext {{
+                                    visibility: hidden;
+                                    width: 200px;
+                                    background-color: #555;
+                                    color: #fff;
+                                    text-align: center;
+                                    border-radius: 6px;
+                                    padding: 5px;
+                                    position: absolute;
+                                    z-index: 1;
+                                    bottom: 125%;
+                                    left: 50%;
+                                    margin-left: -100px;
+                                    opacity: 0;
+                                    transition: opacity 0.3s;
+                                }}
+                                .tooltip:hover .tooltiptext {{
+                                    visibility: visible;
+                                    opacity: 1;
+                                }}
+                                </style>
+                                <div class="tooltip">
+                                    <h3>{keyword.upper()} Alerts <span style="font-size: 0.8em;">ℹ️</span></h3>
+                                    <span class="tooltiptext">{TOOLTIPS.get(keyword, "No description available.")}</span>
+                                </div>
+                                """,
+                                unsafe_allow_html=True,
+                            )
                             
                             # Extract and process data for the current keyword
                             symbols_df = extract_stock_symbols_from_email(EMAIL_ADDRESS, EMAIL_PASSWORD, SENDER_EMAIL, keyword)
