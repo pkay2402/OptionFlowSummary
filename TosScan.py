@@ -1,4 +1,5 @@
 import streamlit as st
+from streamlit_extras.buy_me_a_coffee import button  # Import the Buy Me a Coffee button
 import imaplib
 import email
 import re
@@ -17,7 +18,7 @@ POLL_INTERVAL = 900  # 15 minutes in seconds
 SENDER_EMAIL = "alerts@thinkorswim.com"
 
 # Keywords to search for in email subjects
-KEYWORDS = ["tmo_Short", "tmo_long", "Long_IT_volume","Short_IT_volume","bull_Daily_sqz","bear_Daily_sqz","A+Bull_30m"]  # Add more keywords as needed
+KEYWORDS = ["A+Bull_30m","tmo_Short", "tmo_long", "Long_IT_volume","Short_IT_volume","bull_Daily_sqz","bear_Daily_sqz"]  # Add more keywords as needed
 
 # Track processed email IDs to avoid duplicates
 processed_email_ids = set()
@@ -130,13 +131,8 @@ def main():
     st.title("Thinkorswim Alerts Analyzer")
     st.write("This app polls your email for Thinkorswim alerts and analyzes stock data for different keywords.")
 
-    # Add Buy Me a Coffee button using iframe
-    st.markdown(
-        """
-        <iframe src="https://www.buymeacoffee.com/tosalerts33" width="200" height="50" style="border:none;"></iframe>
-        """,
-        unsafe_allow_html=True,
-    )
+    # Add Buy Me a Coffee button using streamlit-extras
+    button(username="tosalerts33", floating=False, width=221)
 
     # Fetch SPY and QQQ prices
     spy_price, qqq_price = get_spy_qqq_prices()
