@@ -1,3 +1,4 @@
+import streamlit as st
 import imaplib
 import email
 import re
@@ -72,7 +73,7 @@ def extract_stock_symbols_from_email(email_address, password, sender_email):
         return df
 
     except Exception as e:
-        print(f"Error: {e}")
+        st.error(f"Error: {e}")
         return pd.DataFrame(columns=['Ticker', 'Date', 'Signal'])
 
 def fetch_stock_prices(df):
@@ -97,7 +98,7 @@ def fetch_stock_prices(df):
 
             prices.append([ticker, alert_date, alert_price, today_price, rate_of_return, row['Signal']])
         except Exception as e:
-            print(f"Error fetching data for {ticker}: {e}")
+            st.error(f"Error fetching data for {ticker}: {e}")
             prices.append([ticker, alert_date, None, None, None, row['Signal']])
     
     price_df = pd.DataFrame(prices, columns=['Ticker', 'Alert Date', 'Alert Close Price', "Today's Close Price", 'Rate of Return (%)', 'Signal'])
@@ -111,9 +112,9 @@ def save_to_txt(df, base_filename):
         
         with open(filename, 'w') as f:
             f.write(df.to_string(index=False, float_format='%.2f'))
-        print(f"Data saved to {filename}")
+        st.success(f"Data saved to {filename}")
     except Exception as e:
-        print(f"Error saving data to file: {e}")
+        st.error(f"Error saving data to file: {e}")
 
 def save_to_html(df, base_filename):
     try:
@@ -132,27 +133,27 @@ def save_to_html(df, base_filename):
         
         # Save the styled DataFrame to HTML
         styled_df.to_html(filename)
-        print(f"Data saved to {filename}")
+        st.success(f"Data saved to {filename}")
     except Exception as e:
-        print(f"Error saving data to file: {e}")
+        st.error(f"Error saving data to file: {e}")
 
-def poll_emails():
-    while True:
-        print(f"Polling emails at {datetime.datetime.now()}...")
-        symbols_df = extract_stock_symbols_from_email(EMAIL_ADDRESS, EMAIL_PASSWORD, SENDER_EMAIL)
-        if not symbols_df.empty:
-            price_df = fetch_stock_prices(symbols_df)
-            save_to_txt(price_df, BASE_FILENAME)
-            save_to_html(price_df, BASE_FILENAME)
-            print("New data processed and saved.")
-        else:
-            print("No new emails found.")
-        
-        time.sleep(POLL_INTERVAL)
+def main():
+    st.title("TosScan Stock Alerts")
+    st.write("This app polls your email for Thinkorswim alerts and analyzes stock data.")
+
+    if st.button("Poll Emails and Analyze"):
+        with st.spinner("Polling emails and analyzing data..."):
+            symbols_df = extract_stock_symbols_from_email(EMAIL_ADDRESS, EMAIL_PASSWORD, SENDER_EMAIL)
+            if not symbols_df.empty:
+                price_df = fetch_stock_prices(symbols_df)
+                st.dataframe(price_df)  # Display the DataFrame in the app
+                save_to_txt(price_df, BASE_FILENAME)
+                save_to_html(price_df, BASE_FILENAME)
+            else:
+                st.warning("No new emails found.")
 
 if __name__ == "__main__":
     if not EMAIL_ADDRESS or not EMAIL_PASSWORD:
-        print("Error: Email address or password not set in environment variables.")
-        exit()
-    
-    poll_emails()
+        st.error("Error: Email address or password not set in environment variables.")
+    else:
+        main()
