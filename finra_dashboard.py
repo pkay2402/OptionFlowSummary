@@ -1,3 +1,4 @@
+# modules/InstitutionalDataDashboard.py
 import pandas as pd
 import matplotlib.pyplot as plt
 import io
@@ -56,6 +57,34 @@ def get_historical_closing_price(symbol, date):
         print(f"Error fetching historical data for {symbol} on {date}: {e}")
         return 'N/A'
 
+# Function to fetch the latest closing price
+def get_latest_close_price(symbol):
+    try:
+        stock = yf.Ticker(symbol)
+        latest_data = stock.history(period="1d")
+        if not latest_data.empty:
+            return latest_data['Close'].iloc[0]
+        else:
+            return 'N/A'
+    except Exception as e:
+        print(f"Error fetching latest close price for {symbol}: {e}")
+        return 'N/A'
+
+# Function to calculate performance over a period
+def get_performance(symbol, start_date, end_date):
+    try:
+        stock = yf.Ticker(symbol)
+        historical_data = stock.history(start=start_date, end=end_date)
+        if not historical_data.empty:
+            start_price = historical_data['Close'].iloc[0]
+            end_price = historical_data['Close'].iloc[-1]
+            return ((end_price - start_price) / start_price) * 100  # Return percentage change
+        else:
+            return 'N/A'
+    except Exception as e:
+        print(f"Error fetching performance data for {symbol}: {e}")
+        return 'N/A'
+
 # Function to find stocks with total volume over 10 million
 def find_stocks_over_10_million(df, date):
     stocks_over_10_million = []
@@ -72,13 +101,28 @@ def find_stocks_over_10_million(df, date):
             buy_to_sell_ratio = bought_volume / sold_volume if sold_volume > 0 else float('inf')
 
             if buy_to_sell_ratio > 1:
-                description = get_stock_info(row['Symbol'])
-                closing_price = get_historical_closing_price(row['Symbol'], date)
+                symbol = row['Symbol']
+                description = get_stock_info(symbol)
+                closing_price = get_historical_closing_price(symbol, date)
+                latest_close = get_latest_close_price(symbol)
+
+                # Calculate 1-week performance
+                transaction_date = datetime.strptime(date, "%Y%m%d")
+                one_week_ago = (transaction_date - timedelta(days=7)).strftime("%Y-%m-%d")
+                one_week_performance = get_performance(symbol, one_week_ago, transaction_date.strftime("%Y-%m-%d"))
+
+                # Calculate 1-month performance
+                one_month_ago = (transaction_date - timedelta(days=30)).strftime("%Y-%m-%d")
+                one_month_performance = get_performance(symbol, one_month_ago, transaction_date.strftime("%Y-%m-%d"))
+
                 stocks_over_10_million.append({
                     'Date': date,
-                    'Symbol': row['Symbol'],
+                    'Symbol': symbol,
                     'Description': description,
                     'ClosingPrice': closing_price,
+                    'LatestClose': latest_close,
+                    '1WeekPerformance': one_week_performance,
+                    '1MonthPerformance': one_month_performance,
                     'TotalVolume': total_volume,
                     'SoldVolume': sold_volume,
                     'BoughtVolume': bought_volume,
@@ -109,12 +153,25 @@ def analyze_user_stocks(user_stocks):
 
                     description = get_stock_info(symbol)
                     closing_price = get_historical_closing_price(symbol, date)
+                    latest_close = get_latest_close_price(symbol)
+
+                    # Calculate 1-week performance
+                    transaction_date = datetime.strptime(date, "%Y%m%d")
+                    one_week_ago = (transaction_date - timedelta(days=7)).strftime("%Y-%m-%d")
+                    one_week_performance = get_performance(symbol, one_week_ago, transaction_date.strftime("%Y-%m-%d"))
+
+                    # Calculate 1-month performance
+                    one_month_ago = (transaction_date - timedelta(days=30)).strftime("%Y-%m-%d")
+                    one_month_performance = get_performance(symbol, one_month_ago, transaction_date.strftime("%Y-%m-%d"))
 
                     results.append({
                         'Date': date,
                         'Symbol': symbol,
                         'Description': description,
                         'ClosingPrice': closing_price,
+                        'LatestClose': latest_close,
+                        '1WeekPerformance': one_week_performance,
+                        '1MonthPerformance': one_month_performance,
                         'TotalVolume': total_volume,
                         'SoldVolume': sold_volume,
                         'BoughtVolume': bought_volume,
@@ -138,13 +195,28 @@ def find_large_trades(df, date):
             buy_to_sell_ratio = bought_volume / sold_volume if sold_volume > 0 else float('inf')
 
             if buy_to_sell_ratio > 5:
-                description = get_stock_info(row['Symbol'])
-                closing_price = get_historical_closing_price(row['Symbol'], date)
+                symbol = row['Symbol']
+                description = get_stock_info(symbol)
+                closing_price = get_historical_closing_price(symbol, date)
+                latest_close = get_latest_close_price(symbol)
+
+                # Calculate 1-week performance
+                transaction_date = datetime.strptime(date, "%Y%m%d")
+                one_week_ago = (transaction_date - timedelta(days=7)).strftime("%Y-%m-%d")
+                one_week_performance = get_performance(symbol, one_week_ago, transaction_date.strftime("%Y-%m-%d"))
+
+                # Calculate 1-month performance
+                one_month_ago = (transaction_date - timedelta(days=30)).strftime("%Y-%m-%d")
+                one_month_performance = get_performance(symbol, one_month_ago, transaction_date.strftime("%Y-%m-%d"))
+
                 large_trades.append({
                     'Date': date,
-                    'Symbol': row['Symbol'],
+                    'Symbol': symbol,
                     'Description': description,
                     'ClosingPrice': closing_price,
+                    'LatestClose': latest_close,
+                    '1WeekPerformance': one_week_performance,
+                    '1MonthPerformance': one_month_performance,
                     'TotalVolume': total_volume,
                     'SoldVolume': sold_volume,
                     'BoughtVolume': bought_volume,
@@ -158,7 +230,7 @@ def create_dashboard(df):
     plt.figure(figsize=(15, 10))
 
     # Plot: Table with highlighted high Buy-to-Sell Ratios (Top 10)
-    table_data = df[['Symbol', 'Description', 'ClosingPrice', 'TotalVolume', 'BoughtVolume', 'SoldVolume', 'BuyToSellRatio']].round(2)
+    table_data = df[['Symbol', 'Description', 'ClosingPrice', 'LatestClose', '1WeekPerformance', '1MonthPerformance', 'TotalVolume', 'BoughtVolume', 'SoldVolume', 'BuyToSellRatio']].round(2)
 
     # Custom colormap for highlighting
     colors = [(1, 1, 1), (0, 1, 0)]  # From white to green
@@ -199,8 +271,8 @@ def send_chart_to_discord_webhook(image_buffer, webhook_url):
     else:
         print(f"Failed to send chart to Discord: {response.status_code} - {response.text}")
 
-# Streamlit app
-def main():
+# Main function for the Institutional Data Dashboard
+def run():
     st.title("Institutional Data Dashboard")
 
     # Date input for user to select the date
@@ -262,5 +334,6 @@ def main():
         else:
             st.warning("No large trades found in the last 20 days.")
 
+# Run the app
 if __name__ == "__main__":
-    main()
+    run()
