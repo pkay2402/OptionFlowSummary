@@ -130,10 +130,10 @@ def main():
     st.title("Thinkorswim Alerts Analyzer")
     st.write("This app polls your email for Thinkorswim alerts and analyzes stock data for different keywords.")
 
-    # Add Buy Me a Coffee button
+    # Add Buy Me a Coffee button using iframe
     st.markdown(
         """
-        <script type="text/javascript" src="https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js" data-name="bmc-button" data-slug="tosalerts33" data-color="#FFDD00" data-emoji="" data-font="Cookie" data-text="Buy me a coffee" data-outline-color="#000000" data-font-color="#000000" data-coffee-color="#ffffff"></script>
+        <iframe src="https://www.buymeacoffee.com/tosalerts33" width="200" height="50" style="border:none;"></iframe>
         """,
         unsafe_allow_html=True,
     )
@@ -149,8 +149,7 @@ def main():
         st.metric("QQQ Latest Close Price", f"${qqq_price}")
     with col3:
         if st.button("Refresh Prices"):
-            spy_price, qqq_price = get_spy_qqq_prices()
-            st.experimental_rerun()  # Refresh the app to update prices
+            st.rerun()  # Refresh the app to update prices
 
     if st.button("Poll Emails and Analyze"):
         with st.spinner("Polling emails and analyzing data..."):
