@@ -70,19 +70,28 @@ def get_latest_close_price(symbol):
         print(f"Error fetching latest close price for {symbol}: {e}")
         return 'N/A'
 
-# Function to calculate performance over a period
-def get_performance(symbol, start_date, end_date):
+# Function to calculate forward performance (5-day and 10-day)
+def get_forward_performance(symbol, transaction_date, days_forward):
     try:
+        # Convert transaction_date to datetime
+        transaction_date = datetime.strptime(transaction_date, "%Y%m%d")
+        
+        # Calculate end date (transaction_date + days_forward)
+        end_date = (transaction_date + timedelta(days=days_forward)).strftime("%Y-%m-%d")
+        
+        # Fetch historical data
         stock = yf.Ticker(symbol)
-        historical_data = stock.history(start=start_date, end=end_date)
+        historical_data = stock.history(start=transaction_date.strftime("%Y-%m-%d"), end=end_date)
+        
+        # Check if data is available
         if not historical_data.empty and len(historical_data) >= 2:
-            start_price = historical_data['Close'].iloc[0]
-            end_price = historical_data['Close'].iloc[-1]
-            return ((end_price - start_price) / start_price) * 100  # Return percentage change
+            start_price = historical_data['Close'].iloc[0]  # Closing price on transaction date
+            end_price = historical_data['Close'].iloc[-1]  # Closing price on the last available date
+            return ((end_price - start_price) / start_price) * 100  # Percentage change
         else:
-            return 'N/A'  # Return 'N/A' if data is insufficient
+            return 'N/A'  # Data not available
     except Exception as e:
-        print(f"Error fetching performance data for {symbol}: {e}")
+        print(f"Error calculating forward performance for {symbol}: {e}")
         return 'N/A'
 
 # Function to find stocks with total volume over 10 million
@@ -106,14 +115,11 @@ def find_stocks_over_10_million(df, date):
                 closing_price = get_historical_closing_price(symbol, date)
                 latest_close = get_latest_close_price(symbol)
 
-                # Calculate 1-week performance
-                transaction_date = datetime.strptime(date, "%Y%m%d")
-                one_week_ago = (transaction_date - timedelta(days=7)).strftime("%Y-%m-%d")
-                one_week_performance = get_performance(symbol, one_week_ago, transaction_date.strftime("%Y-%m-%d"))
+                # Calculate forward 5-day performance
+                five_day_performance = get_forward_performance(symbol, date, days_forward=5)
 
-                # Calculate 1-month performance
-                one_month_ago = (transaction_date - timedelta(days=30)).strftime("%Y-%m-%d")
-                one_month_performance = get_performance(symbol, one_month_ago, transaction_date.strftime("%Y-%m-%d"))
+                # Calculate forward 10-day performance
+                ten_day_performance = get_forward_performance(symbol, date, days_forward=10)
 
                 stocks_over_10_million.append({
                     'Date': date,
@@ -121,8 +127,8 @@ def find_stocks_over_10_million(df, date):
                     'Description': description,
                     'ClosingPrice': closing_price,
                     'LatestClose': latest_close,
-                    '1WeekPerformance': one_week_performance,
-                    '1MonthPerformance': one_month_performance,
+                    '5DayPerformance': five_day_performance,
+                    '10DayPerformance': ten_day_performance,
                     'TotalVolume': total_volume,
                     'SoldVolume': sold_volume,
                     'BoughtVolume': bought_volume,
@@ -155,14 +161,11 @@ def analyze_user_stocks(user_stocks):
                     closing_price = get_historical_closing_price(symbol, date)
                     latest_close = get_latest_close_price(symbol)
 
-                    # Calculate 1-week performance
-                    transaction_date = datetime.strptime(date, "%Y%m%d")
-                    one_week_ago = (transaction_date - timedelta(days=7)).strftime("%Y-%m-%d")
-                    one_week_performance = get_performance(symbol, one_week_ago, transaction_date.strftime("%Y-%m-%d"))
+                    # Calculate forward 5-day performance
+                    five_day_performance = get_forward_performance(symbol, date, days_forward=5)
 
-                    # Calculate 1-month performance
-                    one_month_ago = (transaction_date - timedelta(days=30)).strftime("%Y-%m-%d")
-                    one_month_performance = get_performance(symbol, one_month_ago, transaction_date.strftime("%Y-%m-%d"))
+                    # Calculate forward 10-day performance
+                    ten_day_performance = get_forward_performance(symbol, date, days_forward=10)
 
                     results.append({
                         'Date': date,
@@ -170,8 +173,8 @@ def analyze_user_stocks(user_stocks):
                         'Description': description,
                         'ClosingPrice': closing_price,
                         'LatestClose': latest_close,
-                        '1WeekPerformance': one_week_performance,
-                        '1MonthPerformance': one_month_performance,
+                        '5DayPerformance': five_day_performance,
+                        '10DayPerformance': ten_day_performance,
                         'TotalVolume': total_volume,
                         'SoldVolume': sold_volume,
                         'BoughtVolume': bought_volume,
@@ -200,14 +203,11 @@ def find_large_trades(df, date):
                 closing_price = get_historical_closing_price(symbol, date)
                 latest_close = get_latest_close_price(symbol)
 
-                # Calculate 1-week performance
-                transaction_date = datetime.strptime(date, "%Y%m%d")
-                one_week_ago = (transaction_date - timedelta(days=7)).strftime("%Y-%m-%d")
-                one_week_performance = get_performance(symbol, one_week_ago, transaction_date.strftime("%Y-%m-%d"))
+                # Calculate forward 5-day performance
+                five_day_performance = get_forward_performance(symbol, date, days_forward=5)
 
-                # Calculate 1-month performance
-                one_month_ago = (transaction_date - timedelta(days=30)).strftime("%Y-%m-%d")
-                one_month_performance = get_performance(symbol, one_month_ago, transaction_date.strftime("%Y-%m-%d"))
+                # Calculate forward 10-day performance
+                ten_day_performance = get_forward_performance(symbol, date, days_forward=10)
 
                 large_trades.append({
                     'Date': date,
@@ -215,8 +215,8 @@ def find_large_trades(df, date):
                     'Description': description,
                     'ClosingPrice': closing_price,
                     'LatestClose': latest_close,
-                    '1WeekPerformance': one_week_performance,
-                    '1MonthPerformance': one_month_performance,
+                    '5DayPerformance': five_day_performance,
+                    '10DayPerformance': ten_day_performance,
                     'TotalVolume': total_volume,
                     'SoldVolume': sold_volume,
                     'BoughtVolume': bought_volume,
@@ -230,7 +230,7 @@ def create_dashboard(df):
     plt.figure(figsize=(15, 10))
 
     # Plot: Table with highlighted high Buy-to-Sell Ratios (Top 10)
-    table_data = df[['Symbol', 'Description', 'ClosingPrice', 'LatestClose', '1WeekPerformance', '1MonthPerformance', 'TotalVolume', 'BoughtVolume', 'SoldVolume', 'BuyToSellRatio']].round(2)
+    table_data = df[['Symbol', 'Description', 'ClosingPrice', 'LatestClose', '5DayPerformance', '10DayPerformance', 'TotalVolume', 'BoughtVolume', 'SoldVolume', 'BuyToSellRatio']].round(2)
 
     # Custom colormap for highlighting
     colors = [(1, 1, 1), (0, 1, 0)]  # From white to green
