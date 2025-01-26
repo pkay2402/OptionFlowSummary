@@ -122,27 +122,37 @@ def main():
 
     if st.button("Poll Emails and Analyze"):
         with st.spinner("Polling emails and analyzing data..."):
-            for keyword in KEYWORDS:
-                st.header(f"{keyword.upper()} Alerts")
-                
-                # Extract and process data for the current keyword
-                symbols_df = extract_stock_symbols_from_email(EMAIL_ADDRESS, EMAIL_PASSWORD, SENDER_EMAIL, keyword)
-                if not symbols_df.empty:
-                    price_df = fetch_stock_prices(symbols_df)
-                    
-                    # Display the DataFrame in the app
-                    st.dataframe(price_df)
+            # Define the number of columns per row
+            cols_per_row = 2
+            rows = (len(KEYWORDS) + cols_per_row - 1) // cols_per_row  # Calculate the number of rows
 
-                    # Add a download button for CSV
-                    csv = price_df.to_csv(index=False).encode('utf-8')
-                    st.download_button(
-                        label=f"Download {keyword.upper()} Data as CSV",
-                        data=csv,
-                        file_name=f"{keyword}_alerts.csv",
-                        mime="text/csv",
-                    )
-                else:
-                    st.warning(f"No new emails found for {keyword}.")
+            for row in range(rows):
+                cols = st.columns(cols_per_row)  # Create columns for the current row
+                for col in range(cols_per_row):
+                    idx = row * cols_per_row + col
+                    if idx < len(KEYWORDS):  # Check if there's a keyword for this column
+                        keyword = KEYWORDS[idx]
+                        with cols[col]:  # Use the corresponding column
+                            st.header(f"{keyword.upper()} Alerts")
+                            
+                            # Extract and process data for the current keyword
+                            symbols_df = extract_stock_symbols_from_email(EMAIL_ADDRESS, EMAIL_PASSWORD, SENDER_EMAIL, keyword)
+                            if not symbols_df.empty:
+                                price_df = fetch_stock_prices(symbols_df)
+                                
+                                # Display the DataFrame in the app
+                                st.dataframe(price_df)
+
+                                # Add a download button for CSV
+                                csv = price_df.to_csv(index=False).encode('utf-8')
+                                st.download_button(
+                                    label=f"Download {keyword.upper()} Data as CSV",
+                                    data=csv,
+                                    file_name=f"{keyword}_alerts.csv",
+                                    mime="text/csv",
+                                )
+                            else:
+                                st.warning(f"No new emails found for {keyword}.")
 
 if __name__ == "__main__":
     main()
