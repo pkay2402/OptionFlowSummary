@@ -16,17 +16,20 @@ EMAIL_PASSWORD = st.secrets["EMAIL_PASSWORD"]
 POLL_INTERVAL = 900  # 15 minutes in seconds
 SENDER_EMAIL = "alerts@thinkorswim.com"
 
+# Keywords to search for in email subjects
+KEYWORDS = ["tmo_short", "tmo_long", "Long_IT_volume","Short_IT_volume","bull_Daily_sqz","bear_Daily_sqz","A+Bull_30m"]  # Add more keywords as needed
+
 # Track processed email IDs to avoid duplicates
 processed_email_ids = set()
 
-def extract_stock_symbols_from_email(email_address, password, sender_email):
+def extract_stock_symbols_from_email(email_address, password, sender_email, keyword):
     try:
         mail = imaplib.IMAP4_SSL('imap.gmail.com')
         mail.login(email_address, password)
         mail.select('inbox')
 
-        date_since = (datetime.date.today() - datetime.timedelta(days=7)).strftime("%d-%b-%Y")
-        search_criteria = f'(FROM "{sender_email}" SUBJECT "tmo_Short" SINCE "{date_since}")'
+        date_since = (datetime.date.today() - datetime.timedelta(days=3)).strftime("%d-%b-%Y")
+        search_criteria = f'(FROM "{sender_email}" SUBJECT "{keyword}" SINCE "{date_since}")'
         _, data = mail.search(None, search_criteria)
 
         stock_data = []
@@ -45,7 +48,7 @@ def extract_stock_symbols_from_email(email_address, password, sender_email):
                 for part in msg.walk():
                     if part.get_content_type() == "text/plain":
                         body = part.get_payload(decode=True).decode()
-                        symbols = re.findall(r'New symbols:\s*([A-Z,\s]+)\s*were added to\s*(tmo_Short)', body)
+                        symbols = re.findall(r'New symbols:\s*([A-Z,\s]+)\s*were added to\s*(' + re.escape(keyword) + ')', body)
                         if symbols:
                             for symbol_group in symbols:
                                 extracted_symbols = symbol_group[0].replace(" ", "").split(",")
@@ -54,7 +57,7 @@ def extract_stock_symbols_from_email(email_address, password, sender_email):
                                     stock_data.append([symbol, email_date, signal_type])
             else:
                 body = msg.get_payload(decode=True).decode()
-                symbols = re.findall(r'New symbols:\s*([A-Z,\s]+)\s*were added to\s*(tmo_Short)', body)
+                symbols = re.findall(r'New symbols:\s*([A-Z,\s]+)\s*were added to\s*(' + re.escape(keyword) + ')', body)
                 if symbols:
                     for symbol_group in symbols:
                         extracted_symbols = symbol_group[0].replace(" ", "").split(",")
@@ -114,29 +117,32 @@ def fetch_stock_prices(df):
     return price_df
 
 def main():
-    # Add a header based on the subject keyword
-    st.title("TMO Short Alerts")
-    st.write("This app polls your email for Thinkorswim alerts and analyzes stock data.")
+    st.title("Thinkorswim Alerts Analyzer")
+    st.write("This app polls your email for Thinkorswim alerts and analyzes stock data for different keywords.")
 
     if st.button("Poll Emails and Analyze"):
         with st.spinner("Polling emails and analyzing data..."):
-            symbols_df = extract_stock_symbols_from_email(EMAIL_ADDRESS, EMAIL_PASSWORD, SENDER_EMAIL)
-            if not symbols_df.empty:
-                price_df = fetch_stock_prices(symbols_df)
+            for keyword in KEYWORDS:
+                st.header(f"{keyword.upper()} Alerts")
                 
-                # Display the DataFrame in the app
-                st.dataframe(price_df)
+                # Extract and process data for the current keyword
+                symbols_df = extract_stock_symbols_from_email(EMAIL_ADDRESS, EMAIL_PASSWORD, SENDER_EMAIL, keyword)
+                if not symbols_df.empty:
+                    price_df = fetch_stock_prices(symbols_df)
+                    
+                    # Display the DataFrame in the app
+                    st.dataframe(price_df)
 
-                # Add a download button for CSV
-                csv = price_df.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="Download Data as CSV",
-                    data=csv,
-                    file_name="tmo_short_alerts.csv",
-                    mime="text/csv",
-                )
-            else:
-                st.warning("No new emails found.")
+                    # Add a download button for CSV
+                    csv = price_df.to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        label=f"Download {keyword.upper()} Data as CSV",
+                        data=csv,
+                        file_name=f"{keyword}_alerts.csv",
+                        mime="text/csv",
+                    )
+                else:
+                    st.warning(f"No new emails found for {keyword}.")
 
 if __name__ == "__main__":
     main()
