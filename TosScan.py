@@ -2,19 +2,19 @@ import streamlit as st
 import imaplib
 import email
 import re
-import os
 import datetime
 import pandas as pd
 from dateutil import parser
 import yfinance as yf
 import time
 
+# Fetch credentials from Streamlit Secrets
+EMAIL_ADDRESS = st.secrets["EMAIL_ADDRESS"]
+EMAIL_PASSWORD = st.secrets["EMAIL_PASSWORD"]
+
 # Constants
 POLL_INTERVAL = 900  # 15 minutes in seconds
-EMAIL_ADDRESS = os.environ.get('EMAIL_ADDRESS')
-EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD')
 SENDER_EMAIL = "alerts@thinkorswim.com"
-BASE_FILENAME = "stock_prices"
 
 # Track processed email IDs to avoid duplicates
 processed_email_ids = set()
@@ -79,6 +79,11 @@ def extract_stock_symbols_from_email(email_address, password, sender_email):
 def fetch_stock_prices(df):
     prices = []
     today = datetime.date.today()
+    
+    # Adjust today's date if it's a weekend
+    if today.weekday() >= 5:  # Saturday (5) or Sunday (6)
+        today = today - datetime.timedelta(days=today.weekday() - 4)  # Set to Friday
+
     for index, row in df.iterrows():
         ticker = row['Ticker']
         alert_date = row['Date']
@@ -101,44 +106,16 @@ def fetch_stock_prices(df):
             st.error(f"Error fetching data for {ticker}: {e}")
             prices.append([ticker, alert_date, None, None, None, row['Signal']])
     
-    price_df = pd.DataFrame(prices, columns=['Ticker', 'Alert Date', 'Alert Close Price', "Today's Close Price", 'Rate of Return (%)', 'Signal'])
+    price_df = pd.DataFrame(prices, columns=['Ticker', 'Alert Date', 'Alert Close Price', "Latest Close Price", 'Rate of Return (%)', 'Signal'])
+    
+    # Sort by Alert Date (latest first)
+    price_df = price_df.sort_values(by='Alert Date', ascending=False)
+    
     return price_df
 
-def save_to_txt(df, base_filename):
-    try:
-        # Generate a timestamp-based versioned filename
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
-        filename = f"{base_filename}_{timestamp}.txt"
-        
-        with open(filename, 'w') as f:
-            f.write(df.to_string(index=False, float_format='%.2f'))
-        st.success(f"Data saved to {filename}")
-    except Exception as e:
-        st.error(f"Error saving data to file: {e}")
-
-def save_to_html(df, base_filename):
-    try:
-        # Generate a timestamp-based versioned filename
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
-        filename = f"{base_filename}_{timestamp}.html"
-        
-        # Apply the highlighting only to the 'Rate of Return (%)' column
-        def highlight_cells(val):
-            if isinstance(val, (int, float)) and val > 3:
-                return 'background-color: yellow'
-            return ''
-        
-        # Apply styles to the 'Rate of Return (%)' column
-        styled_df = df.style.applymap(highlight_cells, subset=['Rate of Return (%)'])
-        
-        # Save the styled DataFrame to HTML
-        styled_df.to_html(filename)
-        st.success(f"Data saved to {filename}")
-    except Exception as e:
-        st.error(f"Error saving data to file: {e}")
-
 def main():
-    st.title("ThinkorSwim Scanners")
+    # Add a header based on the subject keyword
+    st.title("TMO Short Alerts")
     st.write("This app polls your email for Thinkorswim alerts and analyzes stock data.")
 
     if st.button("Poll Emails and Analyze"):
@@ -146,14 +123,20 @@ def main():
             symbols_df = extract_stock_symbols_from_email(EMAIL_ADDRESS, EMAIL_PASSWORD, SENDER_EMAIL)
             if not symbols_df.empty:
                 price_df = fetch_stock_prices(symbols_df)
-                st.dataframe(price_df)  # Display the DataFrame in the app
-                save_to_txt(price_df, BASE_FILENAME)
-                save_to_html(price_df, BASE_FILENAME)
+                
+                # Display the DataFrame in the app
+                st.dataframe(price_df)
+
+                # Add a download button for CSV
+                csv = price_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="Download Data as CSV",
+                    data=csv,
+                    file_name="tmo_short_alerts.csv",
+                    mime="text/csv",
+                )
             else:
                 st.warning("No new emails found.")
 
 if __name__ == "__main__":
-    if not EMAIL_ADDRESS or not EMAIL_PASSWORD:
-        st.error("Error: Email address or password not set in environment variables.")
-    else:
-        main()
+    main()
