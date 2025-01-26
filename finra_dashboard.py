@@ -75,12 +75,12 @@ def get_performance(symbol, start_date, end_date):
     try:
         stock = yf.Ticker(symbol)
         historical_data = stock.history(start=start_date, end=end_date)
-        if not historical_data.empty:
+        if not historical_data.empty and len(historical_data) >= 2:
             start_price = historical_data['Close'].iloc[0]
             end_price = historical_data['Close'].iloc[-1]
             return ((end_price - start_price) / start_price) * 100  # Return percentage change
         else:
-            return 'N/A'
+            return 'N/A'  # Return 'N/A' if data is insufficient
     except Exception as e:
         print(f"Error fetching performance data for {symbol}: {e}")
         return 'N/A'
