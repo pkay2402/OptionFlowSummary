@@ -17,7 +17,7 @@ POLL_INTERVAL = 900  # 15 minutes in seconds
 SENDER_EMAIL = "alerts@thinkorswim.com"
 
 # Keywords to search for in email subjects
-KEYWORDS = ["A+Bull_30m","tmo_Short", "tmo_long", "Long_IT_volume","Short_IT_volume","bull_Daily_sqz","bear_Daily_sqz"]  # Add more keywords as needed
+KEYWORDS = ["tmo_Short", "tmo_long", "Long_IT_volume","Short_IT_volume","bull_Daily_sqz","bear_Daily_sqz","A+Bull_30m"]  # Add more keywords as needed
 
 # Track processed email IDs to avoid duplicates
 processed_email_ids = set()
@@ -129,6 +129,14 @@ def fetch_stock_prices(df):
 def main():
     st.title("Thinkorswim Alerts Analyzer")
     st.write("This app polls your email for Thinkorswim alerts and analyzes stock data for different keywords.")
+
+    # Add Buy Me a Coffee button
+    st.markdown(
+        """
+        <script type="text/javascript" src="https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js" data-name="bmc-button" data-slug="tosalerts33" data-color="#FFDD00" data-emoji="" data-font="Cookie" data-text="Buy me a coffee" data-outline-color="#000000" data-font-color="#000000" data-coffee-color="#ffffff"></script>
+        """,
+        unsafe_allow_html=True,
+    )
 
     # Fetch SPY and QQQ prices
     spy_price, qqq_price = get_spy_qqq_prices()
