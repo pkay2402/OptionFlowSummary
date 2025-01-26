@@ -138,7 +138,7 @@ def save_to_html(df, base_filename):
         st.error(f"Error saving data to file: {e}")
 
 def main():
-    st.title("TosScan Stock Alerts")
+    st.title("ThinkorSwim Scanners")
     st.write("This app polls your email for Thinkorswim alerts and analyzes stock data.")
 
     if st.button("Poll Emails and Analyze"):
