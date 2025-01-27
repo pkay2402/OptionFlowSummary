@@ -18,20 +18,41 @@ POLL_INTERVAL = 900  # 15 minutes in seconds
 SENDER_EMAIL = "alerts@thinkorswim.com"
 
 # Keywords to search for in email subjects
-KEYWORDS = ["A+Bull_30m","tmo_Short", "tmo_long", "Long_IT_volume","Short_IT_volume","bull_Daily_sqz","bear_Daily_sqz"]  # Add more keywords as needed
+KEYWORDS = ["A+Bull_30m", "tmo_Short", "tmo_long", "Long_IT_volume", "Short_IT_volume", "bull_Daily_sqz", "bear_Daily_sqz"]  # Add more keywords as needed
 
 # Track processed email IDs to avoid duplicates
 processed_email_ids = set()
 
-# Tooltip descriptions for each keyword
+# Custom Tooltip descriptions for each keyword
 TOOLTIPS = {
-    "30mins_A+bull_alerts": "This scan identifies bullish setups on a 30-minute chart. Typically I use it to play move 2 weeks out",
-    "Momentum_Short": "This scan identifies short-term overbought conditions for potential short opportunities.",
-    "Momentum_long": "This scan identifies short-term oversold conditions for potential long opportunities.",
-    "LONG_HIGHVOLUME_9EMA": "This scan looks for stocks with highest volume in last 30 days and breaking up above 9ema.",
-    "SHORT_HIGHVOLUME_9EMA": "This scan looks for stocks with highest volume in last 30 days and breaking down below 9ema",
-    "bull_Daily_sqz": "This scan identifies stocks in a bullish squeeze on the daily chart.",
-    "bear_Daily_sqz": "This scan identifies stocks in a bearish squeeze on the daily chart.",
+    "A+Bull_30m": {
+        "header": "30mins A+Bull Alerts",
+        "description": "This scan identifies bullish setups on a 30-minute chart. Typically I use it to play move 2 weeks out."
+    },
+    "tmo_Short": {
+        "header": "Momentum Short Alerts",
+        "description": "This scan identifies short-term overbought conditions for potential short opportunities."
+    },
+    "tmo_long": {
+        "header": "Momentum Long Alerts",
+        "description": "This scan identifies short-term oversold conditions for potential long opportunities."
+    },
+    "Long_IT_volume": {
+        "header": "Long High Volume 9EMA Alerts",
+        "description": "This scan looks for stocks with highest volume in last 30 days and breaking up above 9ema."
+    },
+    "Short_IT_volume": {
+        "header": "Short High Volume 9EMA Alerts",
+        "description": "This scan looks for stocks with highest volume in last 30 days and breaking down below 9ema."
+    },
+    "bull_Daily_sqz": {
+        "header": "Bullish Daily Squeeze Alerts",
+        "description": "This scan identifies stocks in a bullish squeeze on the daily chart."
+    },
+    "bear_Daily_sqz": {
+        "header": "Bearish Daily Squeeze Alerts",
+        "description": "This scan identifies stocks in a bearish squeeze on the daily chart."
+    }
 }
 
 def get_spy_qqq_prices():
@@ -139,7 +160,15 @@ def fetch_stock_prices(df):
             st.error(f"Error fetching data for {ticker}: {e}")
             prices.append([ticker, alert_date, None, None, None, row['Signal']])
     
-    price_df = pd.DataFrame(prices, columns=['Ticker', 'Alert Date', 'ClosingPriceOfDay', "Latest Close Price", 'Rate of Return (%)', 'Signal'])
+    # Customize the column names here
+    price_df = pd.DataFrame(prices, columns=[
+        'Stock Symbol', 
+        'Alert Date', 
+        'Closing Price on Alert Day', 
+        'Current Closing Price', 
+        'Return Since Alert (%)', 
+        'Signal Type'
+    ])
     
     # Sort by Alert Date (latest first)
     price_df = price_df.sort_values(by='Alert Date', ascending=False)
@@ -180,6 +209,7 @@ def main():
                         keyword = KEYWORDS[idx]
                         with cols[col]:  # Use the corresponding column
                             # Add a tooltip for the keyword
+                            tooltip_data = TOOLTIPS.get(keyword, {"header": keyword, "description": "No description available."})
                             st.markdown(
                                 f"""
                                 <style>
@@ -209,8 +239,8 @@ def main():
                                 }}
                                 </style>
                                 <div class="tooltip">
-                                    <h3>{keyword.upper()} Alerts <span style="font-size: 0.8em;">ℹ️</span></h3>
-                                    <span class="tooltiptext">{TOOLTIPS.get(keyword, "No description available.")}</span>
+                                    <h3>{tooltip_data["header"]} <span style="font-size: 0.8em;">ℹ️</span></h3>
+                                    <span class="tooltiptext">{tooltip_data["description"]}</span>
                                 </div>
                                 """,
                                 unsafe_allow_html=True,
@@ -227,7 +257,7 @@ def main():
                                 # Add a download button for CSV
                                 csv = price_df.to_csv(index=False).encode('utf-8')
                                 st.download_button(
-                                    label=f"Download {keyword.upper()} Data as CSV",
+                                    label=f"Download {tooltip_data['header']} Data as CSV",
                                     data=csv,
                                     file_name=f"{keyword}_alerts.csv",
                                     mime="text/csv",
