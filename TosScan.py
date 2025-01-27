@@ -25,11 +25,11 @@ processed_email_ids = set()
 
 # Tooltip descriptions for each keyword
 TOOLTIPS = {
-    "A+Bull_30m": "This scan identifies bullish setups on a 30-minute chart.",
+    "30mins_A+bull_alerts": "This scan identifies bullish setups on a 30-minute chart. Typically I use it to play move 2 weeks out",
     "tmo_Short": "This scan identifies short-term overbought conditions for potential short opportunities.",
     "tmo_long": "This scan identifies short-term oversold conditions for potential long opportunities.",
-    "Long_IT_volume": "This scan looks for stocks with increasing volume and bullish intraday trends.",
-    "Short_IT_volume": "This scan looks for stocks with increasing volume and bearish intraday trends.",
+    "LONG_HIGHVOLUME_9EMA": "This scan looks for stocks with highest volume in last 30 days and breaking up above 9ema.",
+    "SHORT_HIGHVOLUME_9EMA": "This scan looks for stocks with highest volume in last 30 days and breaking down below 9ema",
     "bull_Daily_sqz": "This scan identifies stocks in a bullish squeeze on the daily chart.",
     "bear_Daily_sqz": "This scan identifies stocks in a bearish squeeze on the daily chart.",
 }
