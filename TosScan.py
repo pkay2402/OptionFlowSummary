@@ -158,8 +158,8 @@ def main():
         if st.button("Refresh Prices"):
             st.rerun()  # Refresh the app to update prices
 
-    if st.button("Poll ThinkorSwing Alerts and Analyze"):
-        with st.spinner("Polling emails and analyzing data..."):
+    if st.button("Poll ThinkorSwim Alerts and Analyze"):
+        with st.spinner("Polling alerts and analyzing data..."):
             # Define the number of columns per row
             cols_per_row = 2
             rows = (len(KEYWORDS) + cols_per_row - 1) // cols_per_row  # Calculate the number of rows
