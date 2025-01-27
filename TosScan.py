@@ -14,7 +14,7 @@ EMAIL_ADDRESS = st.secrets["EMAIL_ADDRESS"]
 EMAIL_PASSWORD = st.secrets["EMAIL_PASSWORD"]
 
 # Constants
-POLL_INTERVAL = 900  # 15 minutes in seconds
+POLL_INTERVAL = 600  # 10 minutes in seconds
 SENDER_EMAIL = "alerts@thinkorswim.com"
 
 # Keywords to search for in email subjects
@@ -185,85 +185,86 @@ def main():
     # Fetch SPY and QQQ prices
     spy_price, qqq_price = get_spy_qqq_prices()
 
-    # Display SPY and QQQ prices with a refresh button
-    col1, col2, col3 = st.columns([1, 1, 1])
+    # Display SPY and QQQ prices
+    col1, col2 = st.columns(2)
     with col1:
         st.metric("SPY Latest Close Price", f"${spy_price}")
     with col2:
         st.metric("QQQ Latest Close Price", f"${qqq_price}")
-    with col3:
-        if st.button("Refresh Prices"):
-            st.rerun()  # Refresh the app to update prices
 
-    if st.button("Poll ThinkorSwim Alerts and Analyze"):
-        with st.spinner("Polling alerts and analyzing data..."):
-            # Define the number of columns per row
-            cols_per_row = 2
-            rows = (len(KEYWORDS) + cols_per_row - 1) // cols_per_row  # Calculate the number of rows
+    # Automatically poll emails and update data
+    with st.spinner("Polling alerts and analyzing data..."):
+        # Define the number of columns per row
+        cols_per_row = 2
+        rows = (len(KEYWORDS) + cols_per_row - 1) // cols_per_row  # Calculate the number of rows
 
-            for row in range(rows):
-                cols = st.columns(cols_per_row)  # Create columns for the current row
-                for col in range(cols_per_row):
-                    idx = row * cols_per_row + col
-                    if idx < len(KEYWORDS):  # Check if there's a keyword for this column
-                        keyword = KEYWORDS[idx]
-                        with cols[col]:  # Use the corresponding column
-                            # Add a tooltip for the keyword
-                            tooltip_data = TOOLTIPS.get(keyword, {"header": keyword, "description": "No description available."})
-                            st.markdown(
-                                f"""
-                                <style>
-                                .tooltip {{
-                                    position: relative;
-                                    display: inline-block;
-                                }}
-                                .tooltip .tooltiptext {{
-                                    visibility: hidden;
-                                    width: 200px;
-                                    background-color: #555;
-                                    color: #fff;
-                                    text-align: center;
-                                    border-radius: 6px;
-                                    padding: 5px;
-                                    position: absolute;
-                                    z-index: 1;
-                                    bottom: 125%;
-                                    left: 50%;
-                                    margin-left: -100px;
-                                    opacity: 0;
-                                    transition: opacity 0.3s;
-                                }}
-                                .tooltip:hover .tooltiptext {{
-                                    visibility: visible;
-                                    opacity: 1;
-                                }}
-                                </style>
-                                <div class="tooltip">
-                                    <h3>{tooltip_data["header"]} <span style="font-size: 0.8em;">ℹ️</span></h3>
-                                    <span class="tooltiptext">{tooltip_data["description"]}</span>
-                                </div>
-                                """,
-                                unsafe_allow_html=True,
-                            )
+        for row in range(rows):
+            cols = st.columns(cols_per_row)  # Create columns for the current row
+            for col in range(cols_per_row):
+                idx = row * cols_per_row + col
+                if idx < len(KEYWORDS):  # Check if there's a keyword for this column
+                    keyword = KEYWORDS[idx]
+                    with cols[col]:  # Use the corresponding column
+                        # Add a tooltip for the keyword
+                        tooltip_data = TOOLTIPS.get(keyword, {"header": keyword, "description": "No description available."})
+                        st.markdown(
+                            f"""
+                            <style>
+                            .tooltip {{
+                                position: relative;
+                                display: inline-block;
+                            }}
+                            .tooltip .tooltiptext {{
+                                visibility: hidden;
+                                width: 200px;
+                                background-color: #555;
+                                color: #fff;
+                                text-align: center;
+                                border-radius: 6px;
+                                padding: 5px;
+                                position: absolute;
+                                z-index: 1;
+                                bottom: 125%;
+                                left: 50%;
+                                margin-left: -100px;
+                                opacity: 0;
+                                transition: opacity 0.3s;
+                            }}
+                            .tooltip:hover .tooltiptext {{
+                                visibility: visible;
+                                opacity: 1;
+                            }}
+                            </style>
+                            <div class="tooltip">
+                                <h3>{tooltip_data["header"]} <span style="font-size: 0.8em;">ℹ️</span></h3>
+                                <span class="tooltiptext">{tooltip_data["description"]}</span>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                        
+                        # Extract and process data for the current keyword
+                        symbols_df = extract_stock_symbols_from_email(EMAIL_ADDRESS, EMAIL_PASSWORD, SENDER_EMAIL, keyword)
+                        if not symbols_df.empty:
+                            price_df = fetch_stock_prices(symbols_df)
                             
-                            # Extract and process data for the current keyword
-                            symbols_df = extract_stock_symbols_from_email(EMAIL_ADDRESS, EMAIL_PASSWORD, SENDER_EMAIL, keyword)
-                            if not symbols_df.empty:
-                                price_df = fetch_stock_prices(symbols_df)
-                                
-                                # Display the DataFrame in the app
-                                st.dataframe(price_df)
+                            # Display the DataFrame in the app
+                            st.dataframe(price_df)
 
-                                # Add a download button for CSV
-                                csv = price_df.to_csv(index=False).encode('utf-8')
-                                st.download_button(
-                                    label=f"Download {tooltip_data['header']} Data as CSV",
-                                    data=csv,
-                                    file_name=f"{keyword}_alerts.csv",
-                                    mime="text/csv",
-                                )
-                            else:
-                                st.warning(f"No new emails found for {keyword}.")
+                            # Add a download button for CSV
+                            csv = price_df.to_csv(index=False).encode('utf-8')
+                            st.download_button(
+                                label=f"Download {tooltip_data['header']} Data as CSV",
+                                data=csv,
+                                file_name=f"{keyword}_alerts.csv",
+                                mime="text/csv",
+                            )
+                        else:
+                            st.warning(f"No new emails found for {keyword}.")
+
+    # Automatically rerun the app every POLL_INTERVAL seconds
+    time.sleep(POLL_INTERVAL)
+    st.rerun()
 
 if __name__ == "__main__":
     main()
