@@ -114,11 +114,19 @@ def fetch_stock_prices(df):
         alert_date = row['Date']
         try:
             stock = yf.Ticker(ticker)
-            hist_alert = stock.history(start=alert_date, end=alert_date + datetime.timedelta(days=1))
-            hist_today = stock.history(start=today, end=today + datetime.timedelta(days=1))
             
+            # Fetch alert date close price
+            hist_alert = stock.history(start=alert_date, end=alert_date + datetime.timedelta(days=1))
             alert_price = round(hist_alert['Close'].iloc[0], 2) if not hist_alert.empty else None
-            today_price = round(hist_today['Close'].iloc[0], 2) if not hist_today.empty else None
+            
+            # Fetch latest close price (even if market is closed)
+            hist_today = stock.history(period="1d")  # Fetch the latest available data
+            if not hist_today.empty:
+                today_price = round(hist_today['Close'].iloc[-1], 2)
+            else:
+                # If today's data is unavailable, fetch the most recent historical data
+                hist_recent = stock.history(period="1mo")  # Fetch last month's data
+                today_price = round(hist_recent['Close'].iloc[-1], 2) if not hist_recent.empty else None
             
             # Calculate the rate of return (if both prices are available)
             if alert_price and today_price:
