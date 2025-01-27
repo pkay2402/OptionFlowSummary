@@ -26,7 +26,7 @@ processed_email_ids = set()
 # Custom Tooltip descriptions for each keyword
 TOOLTIPS = {
     "volume_scan": {
-        "header": "Bullish Intrday high volume",
+        "header": "Bullish Intraday high volume",
         "description": "This scan identifies high volume stocks that have very high volume and stock is up atleast 2%."
     },
     "A+Bull_30m": {
@@ -264,7 +264,7 @@ def main():
                                 mime="text/csv",
                             )
                         else:
-                            st.warning(f"No new emails found for {keyword}.")
+                            st.warning(f"No new stock found for {keyword}.")
 
     # Automatically rerun the app every POLL_INTERVAL seconds
     time.sleep(POLL_INTERVAL)
