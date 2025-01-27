@@ -18,13 +18,17 @@ POLL_INTERVAL = 600  # 10 minutes in seconds
 SENDER_EMAIL = "alerts@thinkorswim.com"
 
 # Keywords to search for in email subjects
-KEYWORDS = ["A+Bull_30m", "tmo_long","tmo_Short", "Long_IT_volume", "Short_IT_volume", "bull_Daily_sqz", "bear_Daily_sqz"]  # Add more keywords as needed
+KEYWORDS = ["volume_scan","A+Bull_30m", "tmo_long","tmo_Short", "Long_IT_volume", "Short_IT_volume", "bull_Daily_sqz", "bear_Daily_sqz"]  # Add more keywords as needed
 
 # Track processed email IDs to avoid duplicates
 processed_email_ids = set()
 
 # Custom Tooltip descriptions for each keyword
 TOOLTIPS = {
+    "volume_scan": {
+        "header": "Bullish Intrday high volume",
+        "description": "This scan identifies high volume stocks that have very high volume and stock is up atleast 2%."
+    },
     "A+Bull_30m": {
         "header": "30mins A+Bull Alerts",
         "description": "This scan identifies bullish setups on a 30-minute chart. Typically I use it to play move 2 weeks out."
