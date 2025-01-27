@@ -279,26 +279,25 @@ def main():
                         else:
                             st.warning(f"No new stock found for {keyword}.")
 
-     # Display disclaimer at the bottom
+        # Disclaimer and Important Messages
+    st.markdown("---")
+    st.markdown("### **Disclaimer and Important Messages**")
     st.markdown("""
-    <div style="background-color: #ffe6e6; padding: 20px; border-radius: 5px; border-left: 4px solid #ff0000; margin-top: 30px;">
-        <h3 style="color: #ff0000;">Important Disclaimer</h3>
-        <p><strong>1. Not Financial Advice:</strong><br>
-        This tool is for informational and educational purposes only. It is not intended to provide financial, investment, or trading advice. The data and analysis provided should not be construed as a recommendation to buy, sell, or hold any security or financial instrument.</p>
-        
-        <p><strong>2. No Guarantees:</strong><br>
-        The creator of this tool makes no guarantees regarding the accuracy, completeness, or reliability of the information provided. Stock market investments are inherently risky, and past performance is not indicative of future results.</p>
-        
-        <p><strong>3. Your Responsibility:</strong><br>
-        You are solely responsible for your financial decisions. The creator of this tool is not responsible for any profits or losses you may incur as a result of using this tool or acting on the information provided.</p>
-        
-        <p><strong>4. Consult a Professional:</strong><br>
-        Before making any financial decisions, consult with a qualified financial advisor or professional who can provide personalized advice based on your individual circumstances.</p>
-        
-        <p><strong>5. Use at Your Own Risk:</strong><br>
-        By using this tool, you acknowledge and agree that you are using it at your own risk. The creator disclaims all liability for any damages or losses arising from your use of this tool.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    **1. Not Financial Advice:**  
+    This tool is for informational and educational purposes only. It is not intended to provide financial, investment, or trading advice. The data and analysis provided should not be construed as a recommendation to buy, sell, or hold any security or financial instrument.
+
+    **2. No Guarantees:**  
+    The creator of this tool makes no guarantees regarding the accuracy, completeness, or reliability of the information provided. Stock market investments are inherently risky, and past performance is not indicative of future results.
+
+    **3. Your Responsibility:**  
+    You are solely responsible for your financial decisions. The creator of this tool is not responsible for any profits or losses you may incur as a result of using this tool or acting on the information provided.
+
+    **4. Consult a Professional:**  
+    Before making any financial decisions, consult with a qualified financial advisor or professional who can provide personalized advice based on your individual circumstances.
+
+    **5. Use at Your Own Risk:**  
+    By using this tool, you acknowledge and agree that you are using it at your own risk. The creator disclaims all liability for any damages or losses arising from your use of this tool.
+    """)
 
     # Automatically rerun the app every POLL_INTERVAL seconds
     time.sleep(POLL_INTERVAL)
