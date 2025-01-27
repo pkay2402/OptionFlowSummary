@@ -179,12 +179,12 @@ def fetch_stock_prices(df):
     
     # Customize the column names here
     price_df = pd.DataFrame(prices, columns=[
-        'Stock Symbol', 
+        'Symbol', 
         'Alert Date', 
-        'Closing Price on Alert Day', 
-        'Current Closing Price', 
-        'Return Since Alert (%)', 
-        'Signal Type'
+        'Alert Date Close', 
+        'Today's Close', 
+        'Return Alert(%)', 
+        'Signal'
     ])
     
     # Sort by Alert Date (latest first)
