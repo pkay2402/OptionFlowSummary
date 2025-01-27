@@ -8,6 +8,7 @@ import pandas as pd
 from dateutil import parser
 import yfinance as yf
 import time
+from bs4 import BeautifulSoup
 
 # Fetch credentials from Streamlit Secrets
 EMAIL_ADDRESS = st.secrets["EMAIL_ADDRESS"]
@@ -94,33 +95,35 @@ def extract_stock_symbols_from_email(email_address, password, sender_email, keyw
             if msg.is_multipart():
                 for part in msg.walk():
                     if part.get_content_type() == "text/plain":
+                        # Plain text version of the email
                         body = part.get_payload(decode=True).decode()
-                        # Debug: Print the email body for the keyword
-                        st.write(f"Debug: Email body for {keyword}:")
-                        st.write(body)
-                        
-                        # Extract symbols using regex
-                        symbols = re.findall(r'New symbols:\s*([A-Z,\s]+)\s*were added to\s*(' + re.escape(keyword) + ')', body)
-                        if symbols:
-                            for symbol_group in symbols:
-                                extracted_symbols = symbol_group[0].replace(" ", "").split(",")
-                                signal_type = symbol_group[1]
-                                for symbol in extracted_symbols:
-                                    stock_data.append([symbol, email_date, signal_type])
+                    elif part.get_content_type() == "text/html":
+                        # HTML version of the email
+                        html_body = part.get_payload(decode=True).decode()
+                        # Use BeautifulSoup to extract text from HTML
+                        soup = BeautifulSoup(html_body, "html.parser")
+                        body = soup.get_text()
             else:
-                body = msg.get_payload(decode=True).decode()
-                # Debug: Print the email body for the keyword
-                st.write(f"Debug: Email body for {keyword}:")
-                st.write(body)
-                
-                # Extract symbols using regex
-                symbols = re.findall(r'New symbols:\s*([A-Z,\s]+)\s*were added to\s*(' + re.escape(keyword) + ')', body)
-                if symbols:
-                    for symbol_group in symbols:
-                        extracted_symbols = symbol_group[0].replace(" ", "").split(",")
-                        signal_type = symbol_group[1]
-                        for symbol in extracted_symbols:
-                            stock_data.append([symbol, email_date, signal_type])
+                # If the email is not multipart, check if it's HTML
+                if msg.get_content_type() == "text/html":
+                    html_body = msg.get_payload(decode=True).decode()
+                    soup = BeautifulSoup(html_body, "html.parser")
+                    body = soup.get_text()
+                else:
+                    body = msg.get_payload(decode=True).decode()
+
+            # Debug: Print the cleaned email body
+            st.write(f"Debug: Cleaned email body for {keyword}:")
+            st.write(body)
+
+            # Extract symbols using regex
+            symbols = re.findall(r'New symbols:\s*([A-Z,\s]+)\s*were added to\s*(' + re.escape(keyword) + ')', body)
+            if symbols:
+                for symbol_group in symbols:
+                    extracted_symbols = symbol_group[0].replace(" ", "").split(",")
+                    signal_type = symbol_group[1]
+                    for symbol in extracted_symbols:
+                        stock_data.append([symbol, email_date, signal_type])
 
             processed_email_ids.add(num)  # Mark email as processed
 
