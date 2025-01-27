@@ -18,7 +18,7 @@ POLL_INTERVAL = 600  # 10 minutes in seconds
 SENDER_EMAIL = "alerts@thinkorswim.com"
 
 # Keywords to search for in email subjects
-KEYWORDS = ["volume_scan","A+Bull_30m", "tmo_long","tmo_Short", "Long_IT_volume", "Short_IT_volume", "bull_Daily_sqz", "bear_Daily_sqz"]  # Add more keywords as needed
+KEYWORDS = ["volume_scan", "A+Bull_30m", "tmo_long", "tmo_Short", "Long_IT_volume", "Short_IT_volume", "bull_Daily_sqz", "bear_Daily_sqz"]  # Add more keywords as needed
 
 # Track processed email IDs to avoid duplicates
 processed_email_ids = set()
@@ -27,7 +27,7 @@ processed_email_ids = set()
 TOOLTIPS = {
     "volume_scan": {
         "header": "Bullish Intraday high volume",
-        "description": "This scan identifies high volume stocks that have very high volume and stock is up atleast 2%."
+        "description": "This scan identifies high volume stocks that have very high volume and stock is up at least 2%."
     },
     "A+Bull_30m": {
         "header": "30mins A+Bull Alerts",
@@ -95,6 +95,11 @@ def extract_stock_symbols_from_email(email_address, password, sender_email, keyw
                 for part in msg.walk():
                     if part.get_content_type() == "text/plain":
                         body = part.get_payload(decode=True).decode()
+                        # Debug: Print the email body for the keyword
+                        st.write(f"Debug: Email body for {keyword}:")
+                        st.write(body)
+                        
+                        # Extract symbols using regex
                         symbols = re.findall(r'New symbols:\s*([A-Z,\s]+)\s*were added to\s*(' + re.escape(keyword) + ')', body)
                         if symbols:
                             for symbol_group in symbols:
@@ -104,6 +109,11 @@ def extract_stock_symbols_from_email(email_address, password, sender_email, keyw
                                     stock_data.append([symbol, email_date, signal_type])
             else:
                 body = msg.get_payload(decode=True).decode()
+                # Debug: Print the email body for the keyword
+                st.write(f"Debug: Email body for {keyword}:")
+                st.write(body)
+                
+                # Extract symbols using regex
                 symbols = re.findall(r'New symbols:\s*([A-Z,\s]+)\s*were added to\s*(' + re.escape(keyword) + ')', body)
                 if symbols:
                     for symbol_group in symbols:
