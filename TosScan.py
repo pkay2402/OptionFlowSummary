@@ -88,6 +88,9 @@ def extract_stock_symbols_from_email(email_address, password, sender_email, keyw
             _, data = mail.fetch(num, '(RFC822)')
             msg = email.message_from_bytes(data[0][1])
             email_date = parser.parse(msg['Date']).date()
+            
+            if email_date.weekday() >= 5:  # Skip weekends
+                continue
 
             if msg.is_multipart():
                 for part in msg.walk():
@@ -109,11 +112,18 @@ def extract_stock_symbols_from_email(email_address, password, sender_email, keyw
                 else:
                     body = msg.get_payload(decode=True).decode()
 
+            # Debug: Print the cleaned email body
+            #st.write(f"Debug: Cleaned email body for {keyword}:")
+            #st.write(body)
+
             # Extract symbols using regex
-            symbols = re.findall(r'([A-Z]+)', body)
+            symbols = re.findall(r'New symbols:\s*([A-Z,\s]+)\s*were added to\s*(' + re.escape(keyword) + ')', body)
             if symbols:
-                for symbol in symbols:
-                    stock_data.append([symbol, email_date, keyword])
+                for symbol_group in symbols:
+                    extracted_symbols = symbol_group[0].replace(" ", "").split(",")
+                    signal_type = symbol_group[1]
+                    for symbol in extracted_symbols:
+                        stock_data.append([symbol, email_date, signal_type])
 
             processed_email_ids.add(num)  # Mark email as processed
 
@@ -268,26 +278,6 @@ def main():
                             )
                         else:
                             st.warning(f"No new stock found for {keyword}.")
-
-    # Disclaimer and Important Messages
-    st.markdown("---")
-    st.markdown("### **Disclaimer and Important Messages**")
-    st.markdown("""
-    **1. Not Financial Advice:**  
-    This tool is for informational and educational purposes only. It is not intended to provide financial, investment, or trading advice. The data and analysis provided should not be construed as a recommendation to buy, sell, or hold any security or financial instrument.
-
-    **2. No Guarantees:**  
-    The creator of this tool makes no guarantees regarding the accuracy, completeness, or reliability of the information provided. Stock market investments are inherently risky, and past performance is not indicative of future results.
-
-    **3. Your Responsibility:**  
-    You are solely responsible for your financial decisions. The creator of this tool is not responsible for any profits or losses you may incur as a result of using this tool or acting on the information provided.
-
-    **4. Consult a Professional:**  
-    Before making any financial decisions, consult with a qualified financial advisor or professional who can provide personalized advice based on your individual circumstances.
-
-    **5. Use at Your Own Risk:**  
-    By using this tool, you acknowledge and agree that you are using it at your own risk. The creator disclaims all liability for any damages or losses arising from your use of this tool.
-    """)
 
     # Automatically rerun the app every POLL_INTERVAL seconds
     time.sleep(POLL_INTERVAL)
