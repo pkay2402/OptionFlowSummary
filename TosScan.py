@@ -182,7 +182,7 @@ def fetch_stock_prices(df):
         'Symbol', 
         'Alert Date', 
         'Alert Date Close', 
-        'Today's Close', 
+        'Today Close', 
         'Return Alert(%)', 
         'Signal'
     ])
