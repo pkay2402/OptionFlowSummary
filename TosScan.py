@@ -18,7 +18,7 @@ POLL_INTERVAL = 600  # 10 minutes in seconds
 SENDER_EMAIL = "alerts@thinkorswim.com"
 
 # Keywords to search for in email subjects
-KEYWORDS = ["A+Bull_30m", "tmo_Short", "tmo_long", "Long_IT_volume", "Short_IT_volume", "bull_Daily_sqz", "bear_Daily_sqz"]  # Add more keywords as needed
+KEYWORDS = ["A+Bull_30m", "tmo_long","tmo_Short", "Long_IT_volume", "Short_IT_volume", "bull_Daily_sqz", "bear_Daily_sqz"]  # Add more keywords as needed
 
 # Track processed email IDs to avoid duplicates
 processed_email_ids = set()
