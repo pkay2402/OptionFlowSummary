@@ -113,8 +113,8 @@ def extract_stock_symbols_from_email(email_address, password, sender_email, keyw
                     body = msg.get_payload(decode=True).decode()
 
             # Debug: Print the cleaned email body
-            st.write(f"Debug: Cleaned email body for {keyword}:")
-            st.write(body)
+            #st.write(f"Debug: Cleaned email body for {keyword}:")
+            #st.write(body)
 
             # Extract symbols using regex
             symbols = re.findall(r'New symbols:\s*([A-Z,\s]+)\s*were added to\s*(' + re.escape(keyword) + ')', body)
