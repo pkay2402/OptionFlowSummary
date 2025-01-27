@@ -158,7 +158,7 @@ def main():
         if st.button("Refresh Prices"):
             st.rerun()  # Refresh the app to update prices
 
-    if st.button("Poll ThinorSwing Alerts and Analyze"):
+    if st.button("Poll ThinkorSwing Alerts and Analyze"):
         with st.spinner("Polling emails and analyzing data..."):
             # Define the number of columns per row
             cols_per_row = 2
