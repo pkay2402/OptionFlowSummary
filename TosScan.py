@@ -9,17 +9,22 @@ from dateutil import parser
 import yfinance as yf
 import time
 from bs4 import BeautifulSoup
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from functools import lru_cache
 
 # Fetch credentials from Streamlit Secrets
 EMAIL_ADDRESS = st.secrets["EMAIL_ADDRESS"]
 EMAIL_PASSWORD = st.secrets["EMAIL_PASSWORD"]
 
 # Constants
-POLL_INTERVAL = 600  # 10 minutes in seconds
+POLL_INTERVAL = 900  # 15 minutes in seconds
 SENDER_EMAIL = "alerts@thinkorswim.com"
 
 # Keywords to search for in email subjects
-KEYWORDS = ["volume_scan", "A+Bull_30m", "tmo_long", "tmo_Short", "Long_IT_volume", "Short_IT_volume", "bull_Daily_sqz", "bear_Daily_sqz"]  # Add more keywords as needed
+KEYWORDS = [
+    "volume_scan", "A+Bull_30m", "tmo_long", "tmo_Short", 
+    "Long_IT_volume", "Short_IT_volume", "bull_Daily_sqz", "bear_Daily_sqz"
+]
 
 # Track processed email IDs to avoid duplicates
 processed_email_ids = set()
@@ -60,144 +65,171 @@ TOOLTIPS = {
     }
 }
 
+# Cache yfinance ticker data to avoid redundant API calls
+@lru_cache(maxsize=32)
+def get_ticker_data(ticker):
+    return yf.Ticker(ticker)
+
 def get_spy_qqq_prices():
     """Fetch the latest closing prices for SPY and QQQ."""
-    spy = yf.Ticker("SPY")
-    qqq = yf.Ticker("QQQ")
+    spy = get_ticker_data("SPY")
+    qqq = get_ticker_data("QQQ")
     
     spy_price = round(spy.history(period="1d")['Close'].iloc[-1], 2)
     qqq_price = round(qqq.history(period="1d")['Close'].iloc[-1], 2)
     
     return spy_price, qqq_price
 
-def extract_stock_symbols_from_email(email_address, password, sender_email, keyword):
+def fetch_all_emails(email_address, password, sender_email):
+    """Fetch all emails from the sender and return a list of email messages."""
     try:
         mail = imaplib.IMAP4_SSL('imap.gmail.com')
         mail.login(email_address, password)
         mail.select('inbox')
 
         date_since = (datetime.date.today() - datetime.timedelta(days=2)).strftime("%d-%b-%Y")
-        search_criteria = f'(FROM "{sender_email}" SUBJECT "{keyword}" SINCE "{date_since}")'
+        search_criteria = f'(FROM "{sender_email}" SINCE "{date_since}")'
         _, data = mail.search(None, search_criteria)
 
-        stock_data = []
+        emails = []
         for num in data[0].split():
             if num in processed_email_ids:
                 continue  # Skip already processed emails
 
             _, data = mail.fetch(num, '(RFC822)')
             msg = email.message_from_bytes(data[0][1])
-            email_date = parser.parse(msg['Date']).date()
-            
-            if email_date.weekday() >= 5:  # Skip weekends
-                continue
-
-            if msg.is_multipart():
-                for part in msg.walk():
-                    if part.get_content_type() == "text/plain":
-                        # Plain text version of the email
-                        body = part.get_payload(decode=True).decode()
-                    elif part.get_content_type() == "text/html":
-                        # HTML version of the email
-                        html_body = part.get_payload(decode=True).decode()
-                        # Use BeautifulSoup to extract text from HTML
-                        soup = BeautifulSoup(html_body, "html.parser")
-                        body = soup.get_text()
-            else:
-                # If the email is not multipart, check if it's HTML
-                if msg.get_content_type() == "text/html":
-                    html_body = msg.get_payload(decode=True).decode()
-                    soup = BeautifulSoup(html_body, "html.parser")
-                    body = soup.get_text()
-                else:
-                    body = msg.get_payload(decode=True).decode()
-
-            # Debug: Print the cleaned email body
-            #st.write(f"Debug: Cleaned email body for {keyword}:")
-            #st.write(body)
-
-            # Extract symbols using regex
-            symbols = re.findall(r'New symbols:\s*([A-Z,\s]+)\s*were added to\s*(' + re.escape(keyword) + ')', body)
-            if symbols:
-                for symbol_group in symbols:
-                    extracted_symbols = symbol_group[0].replace(" ", "").split(",")
-                    signal_type = symbol_group[1]
-                    for symbol in extracted_symbols:
-                        stock_data.append([symbol, email_date, signal_type])
-
+            emails.append(msg)
             processed_email_ids.add(num)  # Mark email as processed
 
         mail.close()
         mail.logout()
-
-        df = pd.DataFrame(stock_data, columns=['Ticker', 'Date', 'Signal'])
-        df = df.sort_values(by=['Date', 'Ticker']).drop_duplicates(subset=['Ticker'], keep='last')
-
-        return df
+        return emails
 
     except Exception as e:
-        st.error(f"Error: {e}")
-        return pd.DataFrame(columns=['Ticker', 'Date', 'Signal'])
+        st.error(f"Error fetching emails: {e}")
+        return []
+
+def extract_stock_symbols_from_email(emails, keyword):
+    """Extract stock symbols from emails for a given keyword."""
+    stock_data = []
+    for msg in emails:
+        email_date = parser.parse(msg['Date']).date()
+        
+        if email_date.weekday() >= 5:  # Skip weekends
+            continue
+
+        if msg.is_multipart():
+            for part in msg.walk():
+                if part.get_content_type() == "text/plain":
+                    body = part.get_payload(decode=True).decode()
+                elif part.get_content_type() == "text/html":
+                    html_body = part.get_payload(decode=True).decode()
+                    soup = BeautifulSoup(html_body, "html.parser")
+                    body = soup.get_text()
+        else:
+            if msg.get_content_type() == "text/html":
+                html_body = msg.get_payload(decode=True).decode()
+                soup = BeautifulSoup(html_body, "html.parser")
+                body = soup.get_text()
+            else:
+                body = msg.get_payload(decode=True).decode()
+
+        symbols = re.findall(r'New symbols:\s*([A-Z,\s]+)\s*were added to\s*(' + re.escape(keyword) + ')', body)
+        if symbols:
+            for symbol_group in symbols:
+                extracted_symbols = symbol_group[0].replace(" ", "").split(",")
+                signal_type = symbol_group[1]
+                for symbol in extracted_symbols:
+                    stock_data.append([symbol, email_date, signal_type])
+
+    df = pd.DataFrame(stock_data, columns=['Ticker', 'Date', 'Signal'])
+    df = df.sort_values(by=['Date', 'Ticker']).drop_duplicates(subset=['Ticker'], keep='last')
+    return df
 
 def fetch_stock_prices(df):
+    """Fetch stock prices and calculate returns for a DataFrame of tickers."""
     prices = []
     today = datetime.date.today()
     
-    # Adjust today's date if it's a weekend
     if today.weekday() >= 5:  # Saturday (5) or Sunday (6)
         today = today - datetime.timedelta(days=today.weekday() - 4)  # Set to Friday
 
-    for index, row in df.iterrows():
+    def fetch_ticker_data(row):
         ticker = row['Ticker']
         alert_date = row['Date']
         try:
-            stock = yf.Ticker(ticker)
+            stock = get_ticker_data(ticker)
             
-            # Fetch alert date close price
             hist_alert = stock.history(start=alert_date, end=alert_date + datetime.timedelta(days=1))
             alert_price = round(hist_alert['Close'].iloc[0], 2) if not hist_alert.empty else None
             
-            # Fetch latest close price (even if market is closed)
-            hist_today = stock.history(period="1d")  # Fetch the latest available data
+            hist_today = stock.history(period="1d")
             if not hist_today.empty:
                 today_price = round(hist_today['Close'].iloc[-1], 2)
             else:
-                # If today's data is unavailable, fetch the most recent historical data
-                hist_recent = stock.history(period="1mo")  # Fetch last month's data
+                hist_recent = stock.history(period="1mo")
                 today_price = round(hist_recent['Close'].iloc[-1], 2) if not hist_recent.empty else None
             
-            # Calculate the rate of return (if both prices are available)
             if alert_price and today_price:
                 rate_of_return = ((today_price - alert_price) / alert_price) * 100
             else:
                 rate_of_return = None
 
-            prices.append([ticker, alert_date, alert_price, today_price, rate_of_return, row['Signal']])
+            return [ticker, alert_date, alert_price, today_price, rate_of_return, row['Signal']]
         except Exception as e:
             st.error(f"Error fetching data for {ticker}: {e}")
-            prices.append([ticker, alert_date, None, None, None, row['Signal']])
-    
-    # Customize the column names here
+            return [ticker, alert_date, None, None, None, row['Signal']]
+
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(fetch_ticker_data, row) for _, row in df.iterrows()]
+        for future in as_completed(futures):
+            prices.append(future.result())
+
     price_df = pd.DataFrame(prices, columns=[
-        'Symbol', 
-        'Alert Date', 
-        'Alert Date Close', 
-        'Today Close', 
-        'Return Alert(%)', 
-        'Signal'
+        'Symbol', 'Alert Date', 'Alert Date Close', 'Today Close', 'Return Alert(%)', 'Signal'
     ])
-    
-    # Sort by Alert Date (latest first)
     price_df = price_df.sort_values(by='Alert Date', ascending=False)
-    
     return price_df
 
 def main():
     st.title("Thinkorswim Alerts Analyzer")
     st.write("This app polls your Thinkorswim alerts and analyzes stock data for different keywords.")
 
-    # Add Buy Me a Coffee button using streamlit-extras
+    # Add Buy Me a Coffee button
     button(username="tosalerts33", floating=False, width=221)
+
+    # Add tooltip CSS once
+    st.markdown(
+        """
+        <style>
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 200px;
+            background-color: #555;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -100px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
     # Fetch SPY and QQQ prices
     spy_price, qqq_price = get_spy_qqq_prices()
@@ -209,49 +241,24 @@ def main():
     with col2:
         st.metric("QQQ Latest Close Price", f"${qqq_price}")
 
-    # Automatically poll emails and update data
+    # Fetch all emails once
+    emails = fetch_all_emails(EMAIL_ADDRESS, EMAIL_PASSWORD, SENDER_EMAIL)
+
+    # Process each keyword
     with st.spinner("Polling alerts and analyzing data..."):
-        # Define the number of columns per row
         cols_per_row = 2
-        rows = (len(KEYWORDS) + cols_per_row - 1) // cols_per_row  # Calculate the number of rows
+        rows = (len(KEYWORDS) + cols_per_row - 1) // cols_per_row
 
         for row in range(rows):
-            cols = st.columns(cols_per_row)  # Create columns for the current row
+            cols = st.columns(cols_per_row)
             for col in range(cols_per_row):
                 idx = row * cols_per_row + col
-                if idx < len(KEYWORDS):  # Check if there's a keyword for this column
+                if idx < len(KEYWORDS):
                     keyword = KEYWORDS[idx]
-                    with cols[col]:  # Use the corresponding column
-                        # Add a tooltip for the keyword
+                    with cols[col]:
                         tooltip_data = TOOLTIPS.get(keyword, {"header": keyword, "description": "No description available."})
                         st.markdown(
                             f"""
-                            <style>
-                            .tooltip {{
-                                position: relative;
-                                display: inline-block;
-                            }}
-                            .tooltip .tooltiptext {{
-                                visibility: hidden;
-                                width: 200px;
-                                background-color: #555;
-                                color: #fff;
-                                text-align: center;
-                                border-radius: 6px;
-                                padding: 5px;
-                                position: absolute;
-                                z-index: 1;
-                                bottom: 125%;
-                                left: 50%;
-                                margin-left: -100px;
-                                opacity: 0;
-                                transition: opacity 0.3s;
-                            }}
-                            .tooltip:hover .tooltiptext {{
-                                visibility: visible;
-                                opacity: 1;
-                            }}
-                            </style>
                             <div class="tooltip">
                                 <h3>{tooltip_data["header"]} <span style="font-size: 0.8em;">ℹ️</span></h3>
                                 <span class="tooltiptext">{tooltip_data["description"]}</span>
@@ -260,15 +267,11 @@ def main():
                             unsafe_allow_html=True,
                         )
                         
-                        # Extract and process data for the current keyword
-                        symbols_df = extract_stock_symbols_from_email(EMAIL_ADDRESS, EMAIL_PASSWORD, SENDER_EMAIL, keyword)
+                        symbols_df = extract_stock_symbols_from_email(emails, keyword)
                         if not symbols_df.empty:
                             price_df = fetch_stock_prices(symbols_df)
-                            
-                            # Display the DataFrame in the app
                             st.dataframe(price_df)
 
-                            # Add a download button for CSV
                             csv = price_df.to_csv(index=False).encode('utf-8')
                             st.download_button(
                                 label=f"Download {tooltip_data['header']} Data as CSV",
@@ -279,7 +282,7 @@ def main():
                         else:
                             st.warning(f"No new stock found for {keyword}.")
 
-        # Disclaimer and Important Messages
+    # Disclaimer and Important Messages
     st.markdown("---")
     st.markdown("### **Disclaimer and Important Messages**")
     st.markdown("""
