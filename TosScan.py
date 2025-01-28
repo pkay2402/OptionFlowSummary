@@ -8,7 +8,7 @@ import datetime
 import pandas as pd
 from dateutil import parser
 import yfinance as yf
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from bs4 import BeautifulSoup
 from functools import lru_cache
 
@@ -30,15 +30,12 @@ def get_ticker_data(ticker):
 
 def batch_fetch_prices(tickers):
     """Batch fetch stock prices for multiple tickers."""
-    data = {}
     try:
-        tickers_data = yf.download(tickers, period="1d")
-        for ticker in tickers:
-            if ticker in tickers_data['Close']:
-                data[ticker] = tickers_data['Close'][ticker].iloc[-1]
+        tickers_data = yf.download(tickers, period="1d", group_by="ticker")
+        return {ticker: tickers_data[ticker]["Close"].iloc[-1] for ticker in tickers if ticker in tickers_data}
     except Exception as e:
         st.error(f"Error fetching batch data: {e}")
-    return data
+        return {}
 
 def fetch_emails():
     """Fetch emails from the server."""
@@ -108,7 +105,7 @@ def main():
     
     emails = fetch_emails()
 
-    for keyword in KEYWORDS:
+    def process_keyword(keyword):
         st.subheader(f"Analyzing {keyword}")
         df = extract_stock_symbols(emails, keyword)
         if not df.empty:
@@ -116,6 +113,11 @@ def main():
             st.dataframe(price_df)
         else:
             st.write(f"No data found for {keyword}.")
+
+    with ThreadPoolExecutor() as executor:
+        futures = [executor.submit(process_keyword, keyword) for keyword in KEYWORDS]
+        for future in as_completed(futures):
+            future.result()
 
     st.markdown("---")
     st.write("Polling completed. Next update in 15 minutes...")
