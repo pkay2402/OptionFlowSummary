@@ -42,20 +42,25 @@ def batch_fetch_prices(tickers):
         st.error(f"Error fetching batch data: {e}")
     return data
 
+last_processed_id = st.session_state.get('last_processed_id', 1)  # Initialize at the module level
+
 def fetch_emails():
     """Fetch new emails from the server."""
+    global last_processed_id  # Declare we're using the global variable
     try:
         with imaplib.IMAP4_SSL('imap.gmail.com') as mail:
             mail.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
             mail.select('inbox')
             _, data = mail.search(None, f'(FROM "{SENDER_EMAIL}" UID {last_processed_id}:*)')
             email_data = []
+            new_last_id = last_processed_id
             for num in data[0].split():
                 _, msg_data = mail.fetch(num, '(RFC822)')
                 msg = email.message_from_bytes(msg_data[0][1])
                 email_data.append(msg)
-                last_processed_id = max(last_processed_id, int(num))  # Update last processed ID
-            st.session_state['last_processed_id'] = last_processed_id
+                new_last_id = max(new_last_id, int(num))  # Track the highest ID processed
+            last_processed_id = new_last_id  # Update the global variable
+            st.session_state['last_processed_id'] = last_processed_id  # Save for next session
             return email_data
     except Exception as e:
         st.error(f"Error fetching emails: {e}")
