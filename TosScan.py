@@ -3,12 +3,11 @@ from streamlit_extras.buy_me_a_coffee import button
 import imaplib
 import email
 import re
-import time
 import datetime
 import pandas as pd
 from dateutil import parser
 import yfinance as yf
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from bs4 import BeautifulSoup
 from functools import lru_cache
 
@@ -30,12 +29,15 @@ def get_ticker_data(ticker):
 
 def batch_fetch_prices(tickers):
     """Batch fetch stock prices for multiple tickers."""
+    data = {}
     try:
-        tickers_data = yf.download(tickers, period="1d", group_by="ticker")
-        return {ticker: tickers_data[ticker]["Close"].iloc[-1] for ticker in tickers if ticker in tickers_data}
+        tickers_data = yf.download(tickers, period="1d", group_by="ticker", progress=False)
+        for ticker in tickers:
+            if ticker in tickers_data.columns.get_level_values(1):
+                data[ticker] = tickers_data["Close"][ticker].iloc[-1]
     except Exception as e:
         st.error(f"Error fetching batch data: {e}")
-        return {}
+    return data
 
 def fetch_emails():
     """Fetch emails from the server."""
@@ -105,7 +107,7 @@ def main():
     
     emails = fetch_emails()
 
-    def process_keyword(keyword):
+    for keyword in KEYWORDS:
         st.subheader(f"Analyzing {keyword}")
         df = extract_stock_symbols(emails, keyword)
         if not df.empty:
@@ -114,15 +116,19 @@ def main():
         else:
             st.write(f"No data found for {keyword}.")
 
-    with ThreadPoolExecutor() as executor:
-        futures = [executor.submit(process_keyword, keyword) for keyword in KEYWORDS]
-        for future in as_completed(futures):
-            future.result()
-
+    # Add JavaScript-based auto-refresh
     st.markdown("---")
-    st.write("Polling completed. Next update in 15 minutes...")
-    time.sleep(POLL_INTERVAL)
-    #st.experimental_rerun()
+    st.write("Polling completed. Auto-refreshing in 15 minutes...")
+    st.components.v1.html(
+        """
+        <script>
+            setTimeout(function() {
+                window.location.reload();
+            }, 900000); // Refresh after 900,000 milliseconds (15 minutes)
+        </script>
+        """,
+        height=0,
+    )
 
 if __name__ == "__main__":
     main()
