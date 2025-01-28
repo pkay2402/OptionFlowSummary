@@ -120,7 +120,7 @@ def main():
     st.markdown("---")
     st.write("Polling completed. Next update in 15 minutes...")
     time.sleep(POLL_INTERVAL)
-    st.experimental_rerun()
+    #st.experimental_rerun()
 
 if __name__ == "__main__":
     main()
