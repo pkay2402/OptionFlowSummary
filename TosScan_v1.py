@@ -45,7 +45,7 @@ def batch_fetch_prices(tickers):
 last_processed_id = st.session_state.get('last_processed_id', 1)  # Initialize at the module level
 
 def fetch_emails():
-    """Fetch new emails from the server."""
+    """Fetch new stock scans from the server."""
     global last_processed_id  # Declare we're using the global variable
     try:
         with imaplib.IMAP4_SSL('imap.gmail.com') as mail:
