@@ -5,6 +5,7 @@ from datetime import datetime
 import streamlit as st
 from typing import List, Optional
 import logging
+import time  # New import for auto-refresh
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -46,40 +47,31 @@ def fetch_data_from_urls(urls: List[str]) -> pd.DataFrame:
             data_frames.append(df)
     return pd.concat(data_frames, ignore_index=True) if data_frames else pd.DataFrame()
 
+@st.cache_data(ttl=1800)  # Cache is valid for 1800 seconds (30 minutes)
+def load_data(urls: List[str]) -> pd.DataFrame:
+    """Load and cache data from URLs."""
+    return fetch_data_from_urls(urls)
+
 def filter_risk_reversal(df: pd.DataFrame, exclude_symbols: List[str], strike_proximity: int = 5) -> pd.DataFrame:
-    """
-    Filter for Risk Reversal trades by grouping calls and puts with similar strike prices.
-    
-    Args:
-        df: Input DataFrame containing options data.
-        exclude_symbols: List of symbols to exclude.
-        strike_proximity: Maximum allowed difference between call and put strike prices.
-    
-    Returns:
-        DataFrame with reshaped data for Risk Reversal trades.
-    """
+    """Filter for Risk Reversal trades."""
     if exclude_symbols:
         df = df[~df['Symbol'].isin(exclude_symbols)]
 
-    # Separate calls and puts
     calls = df[df['Call/Put'] == 'C']
     puts = df[df['Call/Put'] == 'P']
 
-    # Merge calls and puts on Symbol and Expiration
     merged = pd.merge(
         calls, puts,
         on=['Symbol', 'Expiration'],
         suffixes=('_call', '_put')
     )
 
-    # Filter for strike price proximity and volume
     merged = merged[
         (abs(merged['Strike Price_call'] - merged['Strike Price_put']) <= strike_proximity) &
         (merged['Volume_call'] >= 3000) &
         (merged['Volume_put'] >= 3000)
     ]
 
-    # Select relevant columns
     columns_to_keep = [
         'Symbol', 'Expiration',
         'Strike Price_call', 'Volume_call', 'Last Price_call',
@@ -87,15 +79,12 @@ def filter_risk_reversal(df: pd.DataFrame, exclude_symbols: List[str], strike_pr
     ]
     merged = merged[columns_to_keep]
 
-    # Drop duplicates based on Symbol, Expiration, and Strike Prices
     merged = merged.drop_duplicates(subset=[
         'Symbol', 'Expiration', 'Strike Price_call', 'Strike Price_put'
     ])
 
-    # Reshape the data to group calls and puts vertically
     reshaped_data = []
     for _, row in merged.iterrows():
-        # Append call data
         reshaped_data.append({
             'Symbol': row['Symbol'],
             'Type': 'Call',
@@ -104,7 +93,6 @@ def filter_risk_reversal(df: pd.DataFrame, exclude_symbols: List[str], strike_pr
             'Volume': row['Volume_call'],
             'Last Price': row['Last Price_call']
         })
-        # Append put data
         reshaped_data.append({
             'Symbol': row['Symbol'],
             'Type': 'Put',
@@ -114,10 +102,8 @@ def filter_risk_reversal(df: pd.DataFrame, exclude_symbols: List[str], strike_pr
             'Last Price': row['Last Price_put']
         })
 
-    # Convert reshaped data to DataFrame
     reshaped_df = pd.DataFrame(reshaped_data)
 
-    # Drop duplicates in the reshaped DataFrame
     reshaped_df = reshaped_df.drop_duplicates(subset=[
         'Symbol', 'Expiration', 'Strike Price', 'Type'
     ])
@@ -141,23 +127,16 @@ def summarize_transactions(df: pd.DataFrame, whale_filter: bool = False, exclude
     )
     return summary.sort_values(by='Transaction Value', ascending=False)
 
-@st.cache_data
-def load_data(urls: List[str]) -> pd.DataFrame:
-    """Load and cache data from URLs."""
-    return fetch_data_from_urls(urls)
-
 def run():
     """Main function to run the Streamlit application."""
     st.set_page_config(page_title="Flow Summary", layout="wide")
     st.title("📊 Flow Summary")
 
-    # Sidebar for filters and options
     with st.sidebar:
         st.header("Filters & Options")
         whale_option = st.checkbox("Show Whale Transactions Only")
         risk_reversal_option = st.checkbox("Show Risk Reversal Trades")
         
-        # User input for excluded symbols
         default_excluded_symbols = ["SPX", "SPXW", "VIX", "SPY"]
         excluded_symbols = st.text_input(
             "Enter symbols to exclude (comma-separated)",
@@ -165,7 +144,11 @@ def run():
         )
         excluded_symbols = [s.strip() for s in excluded_symbols.split(",") if s.strip()]
 
-    # URLs for data fetching
+        auto_refresh = st.checkbox("Enable Auto Refresh")
+        refresh_interval = st.number_input(
+            "Refresh Interval (seconds)", min_value=10, max_value=1800, value=30, step=10
+        ) if auto_refresh else None
+
     urls = [
         "https://www.cboe.com/us/options/market_statistics/symbol_data/csv/?mkt=cone",
         "https://www.cboe.com/us/options/market_statistics/symbol_data/csv/?mkt=opt",
@@ -173,12 +156,10 @@ def run():
         "https://www.cboe.com/us/options/market_statistics/symbol_data/csv/?mkt=exo"
     ]
 
-    # Fetch data with a progress spinner
     with st.spinner("Fetching data..."):
         data = load_data(urls)
 
     if not data.empty:
-        # Use tabs for different views
         tab1, tab2, tab3 = st.tabs(["Risk Reversal Trades", "Whale Transactions", "Options Flow Analysis"])
 
         with tab1:
@@ -244,6 +225,11 @@ def run():
             )
 
     st.write("This is the Flow Summary application.")
+
+    if auto_refresh:
+        st.write(f"Auto-refreshing every {refresh_interval} seconds...")
+        time.sleep(refresh_interval)
+        st.experimental_rerun()
 
 if __name__ == "__main__":
     run()
