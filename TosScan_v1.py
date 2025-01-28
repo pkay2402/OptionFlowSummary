@@ -160,7 +160,7 @@ def main():
     if spy_price is not None and qqq_price is not None:
         col1, col2 = st.columns(2)
         with col1:
-            st.metric("SPY Latest Close Price", f"<span class="math-inline">\{spy\_price\}"\)
+            st.metric("SPY Latest Close Price", f"<span class=\"math-inline\">\\{spy_price\\}</span>")
 with col2\:
 st\.metric\("QQQ Latest Close Price", f"</span>{qqq_price}")
 
