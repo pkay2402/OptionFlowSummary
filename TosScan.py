@@ -192,7 +192,7 @@ def fetch_stock_prices(df):
     return price_df
 
 def main():
-    st.title("Thinkorswim Alerts Analyzer")
+    st.title("📈 Thinkorswim Alerts Analyzer")
     st.write("This app polls your Thinkorswim alerts and analyzes stock data for different keywords.")
 
     # Add Buy Me a Coffee button
@@ -270,7 +270,11 @@ def main():
                         symbols_df = extract_stock_symbols_from_email(emails, keyword)
                         if not symbols_df.empty:
                             price_df = fetch_stock_prices(symbols_df)
-                            st.dataframe(price_df)
+                            st.dataframe(price_df.style.format({
+                                'Alert Date Close': '{:.2f}',
+                                'Today Close': '{:.2f}',
+                                'Return Alert(%)': '{:.2f}%'
+                            }))
 
                             csv = price_df.to_csv(index=False).encode('utf-8')
                             st.download_button(
