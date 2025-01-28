@@ -33,7 +33,7 @@ TOOLTIPS = {
     "bear_Daily_sqz": {"header": "Bearish Daily Squeeze Alerts", "description": "This scan identifies stocks in a bearish squeeze on the daily chart."},
 }
 
-processed_email_uids = set()  # Global set for processed email UIDs
+processed_email_uids = set()
 
 def get_spy_qqq_prices():
     spy = yf.Ticker("SPY")
@@ -45,7 +45,6 @@ def get_spy_qqq_prices():
     except Exception as e:
         st.error(f"Error fetching SPY/QQQ prices: {e}")
         return None, None
-
 
 async def fetch_emails_and_extract(email_address, password, sender_email, keyword):
     try:
@@ -108,7 +107,6 @@ async def fetch_emails_and_extract(email_address, password, sender_email, keywor
         st.error(f"Error: {e}")
         return pd.DataFrame(columns=['Ticker', 'Date', 'Signal'])
 
-
 def fetch_stock_prices(df):
     prices = []
     today = datetime.date.today()
@@ -147,6 +145,13 @@ def fetch_stock_prices(df):
     return price_df
 
 
+@st.cache_data(ttl=POLL_INTERVAL)
+async def get_all_data():
+    results = {}
+    for keyword in KEYWORDS:
+        results[keyword] = await fetch_emails_and_extract(EMAIL_ADDRESS, EMAIL_PASSWORD, SENDER_EMAIL, keyword)
+    return results
+
 def main():
     st.title("Thinkorswim Alerts Analyzer")
     button(username="tosalerts33", floating=False, width=221)
@@ -159,11 +164,4 @@ def main():
 with col2\:
 st\.metric\("QQQ Latest Close Price", f"</span>{qqq_price}")
 
-    async def process_all_keywords():
-        results = {}
-        for keyword in KEYWORDS:
-            results[keyword] = await fetch_emails_and_extract(EMAIL_ADDRESS, EMAIL_PASSWORD, SENDER_EMAIL, keyword)
-        return results
-
-    async def display_data(results):
-        for keyword,
+    if st.button("Refresh Data"):
