@@ -11,3 +11,4 @@ matplotlib
 seaborn
 nest_asyncio
 beautifulsoup4
+sqlite3
