@@ -76,7 +76,7 @@ def extract_stock_symbols_from_email(email_address, password, sender_email, keyw
         mail.login(email_address, password)
         mail.select('inbox')
 
-        date_since = (datetime.date.today() - datetime.timedelta(days=3)).strftime("%d-%b-%Y")
+        date_since = (datetime.date.today() - datetime.timedelta(days=2)).strftime("%d-%b-%Y")
         search_criteria = f'(FROM "{sender_email}" SUBJECT "{keyword}" SINCE "{date_since}")'
         _, data = mail.search(None, search_criteria)
 
