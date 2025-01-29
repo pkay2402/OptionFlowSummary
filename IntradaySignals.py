@@ -84,7 +84,7 @@ def main():
             
             # Send the message only once when the market is closed
             if not market_status_sent:
-                send_to_discord("Market is currently closed. Signals will resume during market hours.")
+                #send_to_discord("Market is currently closed. Signals will resume during market hours.")
                 market_status_sent = True  # Set the flag so it doesn't send repeatedly
             
             time.sleep(900)  # Sleep for 15 minutes
@@ -93,7 +93,7 @@ def main():
             # Reset the flag once the market opens
             if market_status_sent:
                 print("Market is now open!")
-                send_to_discord("Market has opened. Starting signal detection!")
+                #send_to_discord("Market has opened. Starting signal detection!")
                 market_status_sent = False
 
         # Fetch and process data only if the market is open
