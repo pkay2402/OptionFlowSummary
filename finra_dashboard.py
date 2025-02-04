@@ -230,6 +230,7 @@ def create_dashboard(df):
     plt.figure(figsize=(15, 10))
 
     # Plot: Table with highlighted high Buy-to-Sell Ratios (Top 10)
+    df['Description'] = df['Description'].str[:10]
     table_data = df[['Symbol', 'Description', 'ClosingPrice', 'LatestClose', '5DayPerformance', '10DayPerformance', 'TotalVolume', 'BoughtVolume', 'SoldVolume', 'BuyToSellRatio']].round(2)
 
     # Custom colormap for highlighting
