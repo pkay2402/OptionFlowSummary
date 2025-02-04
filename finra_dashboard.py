@@ -212,7 +212,7 @@ def find_large_trades(df, date):
                 large_trades.append({
                     'Date': date,
                     'Symbol': symbol,
-                    'Description': description,
+                    'BuyToSellRatio': buy_to_sell_ratio,
                     'ClosingPrice': closing_price,
                     'LatestClose': latest_close,
                     '5DayPerformance': five_day_performance,
@@ -220,7 +220,7 @@ def find_large_trades(df, date):
                     'TotalVolume': total_volume,
                     'SoldVolume': sold_volume,
                     'BoughtVolume': bought_volume,
-                    'BuyToSellRatio': buy_to_sell_ratio
+                    'Description': description
                 })
 
     return pd.DataFrame(large_trades)
