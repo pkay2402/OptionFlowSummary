@@ -96,36 +96,24 @@ def extract_stock_symbols_from_email(email_address, password, sender_email, keyw
         return pd.DataFrame(columns=['Ticker', 'Date', 'Signal'])
 
 def fetch_stock_prices(df):
-    """Fetch stock prices for the given tickers."""
-    if df.empty or df['Ticker'].nunique() == 0:
-        return pd.DataFrame(columns=['Symbol', 'Alert Date', 'Alert Close', 'Today Close', 'Return (%)', 'Signal'])
-
+    """Fetch stock prices ONLY for SPY and QQQ."""
     from pandas.tseries.offsets import BDay
-    today = (datetime.datetime.today() - BDay(1)).date()  # Adjust for weekends/holidays
 
-    tickers = df['Ticker'].dropna().unique().tolist()
-    if not tickers:
-        return pd.DataFrame(columns=['Symbol', 'Alert Date', 'Alert Close', 'Today Close', 'Return (%)', 'Signal'])
+    today = (datetime.datetime.today() - BDay(1)).date()  # Adjust for weekends/holidays
+    spy_qqq = ['SPY', 'QQQ']
 
     stock_data = {}
-    for i in range(0, len(tickers), 10):  # Batch processing
-        batch = tickers[i:i + 10]
-        try:
-            data = yf.download(batch, start=df['Date'].min(), end=today, group_by='ticker')['Close']
-            stock_data.update(data.to_dict())
-        except Exception as e:
-            st.warning(f"Error fetching data for {batch}: {e}")
+    try:
+        data = yf.download(spy_qqq, start=df['Date'].min(), end=today, group_by='ticker')['Close']
+        stock_data.update(data.to_dict())
+    except Exception as e:
+        st.warning(f"Error fetching SPY/QQQ data: {e}")
 
     prices = []
     for _, row in df.iterrows():
-        ticker = row['Ticker']
-        alert_price = stock_data.get(ticker, {}).get(row['Date'], None)
-        today_price = stock_data.get(ticker, {}).get(today, None)
+        prices.append([row['Ticker'], row['Date'], row['Signal']])
 
-        rate_of_return = ((today_price - alert_price) / alert_price * 100) if alert_price and today_price else None
-        prices.append([ticker, row['Date'], alert_price, today_price, rate_of_return, row['Signal']])
-
-    return pd.DataFrame(prices, columns=['Symbol', 'Alert Date', 'Alert Close', 'Today Close', 'Return (%)', 'Signal'])
+    return pd.DataFrame(prices, columns=['Symbol', 'Alert Date', 'Signal'])
 
 
 def main():
