@@ -93,10 +93,6 @@ def extract_stock_symbols_from_email(email_address, password, sender_email, keyw
                 else:
                     body = msg.get_payload(decode=True).decode()
 
-            # Debug: Print the cleaned email body
-            #st.write(f"Debug: Cleaned email body for {keyword}:")
-            #st.write(body)
-
             # Extract symbols using regex
             symbols = re.findall(r'New symbols:\s*([A-Z,\s]+)\s*were added to\s*(' + re.escape(keyword) + ')', body)
             if symbols:
@@ -119,59 +115,6 @@ def extract_stock_symbols_from_email(email_address, password, sender_email, keyw
     except Exception as e:
         st.error(f"Error: {e}")
         return pd.DataFrame(columns=['Ticker', 'Date', 'Signal'])
-
-def fetch_stock_prices(df):
-    prices = []
-    today = datetime.date.today()
-    
-    # Adjust today's date if it's a weekend
-    if today.weekday() >= 5:  # Saturday (5) or Sunday (6)
-        today = today - datetime.timedelta(days=today.weekday() - 4)  # Set to Friday
-
-    for index, row in df.iterrows():
-        ticker = row['Ticker']
-        alert_date = row['Date']
-        try:
-            stock = yf.Ticker(ticker)
-            
-            # Fetch alert date close price
-            hist_alert = stock.history(start=alert_date, end=alert_date + datetime.timedelta(days=1))
-            alert_price = round(hist_alert['Close'].iloc[0], 2) if not hist_alert.empty else None
-            
-            # Fetch latest close price (even if market is closed)
-            hist_today = stock.history(period="1d")  # Fetch the latest available data
-            if not hist_today.empty:
-                today_price = round(hist_today['Close'].iloc[-1], 2)
-            else:
-                # If today's data is unavailable, fetch the most recent historical data
-                hist_recent = stock.history(period="1mo")  # Fetch last month's data
-                today_price = round(hist_recent['Close'].iloc[-1], 2) if not hist_recent.empty else None
-            
-            # Calculate the rate of return (if both prices are available)
-            if alert_price and today_price:
-                rate_of_return = ((today_price - alert_price) / alert_price) * 100
-            else:
-                rate_of_return = None
-
-            prices.append([ticker, alert_date, alert_price, today_price, rate_of_return, row['Signal']])
-        except Exception as e:
-            st.error(f"Error fetching data for {ticker}: {e}")
-            prices.append([ticker, alert_date, None, None, None, row['Signal']])
-    
-    # Customize the column names here
-    price_df = pd.DataFrame(prices, columns=[
-        'Symbol', 
-        'Alert Date', 
-        'Alert Date Close', 
-        'Today Close', 
-        'Return Alert(%)', 
-        'Signal'
-    ])
-    
-    # Sort by Alert Date (latest first)
-    price_df = price_df.sort_values(by='Alert Date', ascending=False)
-    
-    return price_df
 
 def main():
     st.title("Thinkorswim Alerts Analyzer")
@@ -207,36 +150,16 @@ def main():
                         tooltip_data = TOOLTIPS.get(keyword, {"header": keyword, "description": "No description available."})
                         st.markdown(
                             f"""
-                            <style>
-                            .tooltip {{
-                                position: relative;
-                                display: inline-block;
-                            }}
-                            .tooltip .tooltiptext {{
-                                visibility: hidden;
-                                width: 200px;
-                                background-color: #555;
-                                color: #fff;
-                                text-align: center;
-                                border-radius: 6px;
-                                padding: 5px;
-                                position: absolute;
-                                z-index: 1;
-                                bottom: 125%;
-                                left: 50%;
-                                margin-left: -100px;
-                                opacity: 0;
-                                transition: opacity 0.3s;
-                            }}
-                            .tooltip:hover .tooltiptext {{
-                                visibility: visible;
-                                opacity: 1;
-                            }}
-                            </style>
-                            <div class="tooltip">
-                                <h3>{tooltip_data["header"]} <span style="font-size: 0.8em;">ℹ️</span></h3>
-                                <span class="tooltiptext">{tooltip_data["description"]}</span>
-                            </div>
+                            
+                            
+
+                                
+{tooltip_data["header"]} ℹ️
+
+
+                                {tooltip_data["description"]}
+                            
+
                             """,
                             unsafe_allow_html=True,
                         )
@@ -244,23 +167,21 @@ def main():
                         # Extract and process data for the current keyword
                         symbols_df = extract_stock_symbols_from_email(EMAIL_ADDRESS, EMAIL_PASSWORD, SENDER_EMAIL, keyword)
                         if not symbols_df.empty:
-                            price_df = fetch_stock_prices(symbols_df)
-                            
-                            # Display the DataFrame in the app
-                            st.dataframe(price_df)
-
-                            # Add a download button for CSV
-                            csv = price_df.to_csv(index=False).encode('utf-8')
-                            st.download_button(
-                                label=f"Download {tooltip_data['header']} Data as CSV",
-                                data=csv,
-                                file_name=f"{keyword}_alerts.csv",
-                                mime="text/csv",
-                            )
+                            # Create a collapsible component for each table
+                            with st.expander(f"Show {tooltip_data['header']} Data"):
+                                st.dataframe(symbols_df)
+                                # Add a download button for CSV inside the expander
+                                csv = symbols_df.to_csv(index=False).encode('utf-8')
+                                st.download_button(
+                                    label=f"Download {tooltip_data['header']} Data as CSV",
+                                    data=csv,
+                                    file_name=f"{keyword}_alerts.csv",
+                                    mime="text/csv",
+                                )
                         else:
                             st.warning(f"No new stock found for {keyword}.")
 
-        # Disclaimer and Important Messages
+    # Disclaimer and Important Messages
     st.markdown("---")
     st.markdown("### **Disclaimer and Important Messages**")
     st.markdown("""
