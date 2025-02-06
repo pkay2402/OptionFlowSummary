@@ -7,7 +7,7 @@ import datetime
 import pandas as pd
 from dateutil import parser
 import yfinance as yf
-import asyncio
+import time
 from bs4 import BeautifulSoup
 
 # Fetch credentials from Streamlit Secrets
@@ -15,38 +15,40 @@ EMAIL_ADDRESS = st.secrets["EMAIL_ADDRESS"]
 EMAIL_PASSWORD = st.secrets["EMAIL_PASSWORD"]
 
 # Constants
-POLL_INTERVAL = 600  # 10 minutes in seconds
+POLL_INTERVAL = 600  # 10 minutes
 SENDER_EMAIL = "alerts@thinkorswim.com"
 
-# Keywords
-KEYWORDS = ["volume_scan", "A+Bull_30m", "tmo_long", "tmo_Short", "Long_IT_volume", "Short_IT_volume", "bull_Daily_sqz", "bear_Daily_sqz"]
+# Keywords for email subjects
+KEYWORDS = [
+    "orb_bull", "orb_bear", "volume_scan", "A+Bull_30m", "tmo_long", "tmo_Short",
+    "Long_IT_volume", "Short_IT_volume", "bull_Daily_sqz", "bear_Daily_sqz"
+]
 
-# Tooltips
+# Track processed email IDs
+processed_email_ids = set()
+
+# Tooltip descriptions
 TOOLTIPS = {
-    "volume_scan": {"header": "Bullish Intraday high volume", "description": "This scan identifies high volume stocks that have very high volume and stock is up at least 2%."},
-    "A+Bull_30m": {"header": "30mins A+Bull Alerts", "description": "This scan identifies bullish setups on a 30-minute chart. Typically I use it to play move 2 weeks out."},
-    "tmo_Short": {"header": "Momentum Short Alerts", "description": "This scan identifies short-term overbought conditions for potential short opportunities."},
-    "tmo_long": {"header": "Momentum Long Alerts", "description": "This scan identifies short-term oversold conditions for potential long opportunities."},
-    "Long_IT_volume": {"header": "Long High Volume 9EMA Alerts", "description": "This scan looks for stocks with highest volume in last 30 days and breaking up above 9ema."},
-    "Short_IT_volume": {"header": "Short High Volume 9EMA Alerts", "description": "This scan looks for stocks with highest volume in last 30 days and breaking down below 9ema."},
-    "bull_Daily_sqz": {"header": "Bullish Daily Squeeze Alerts", "description": "This scan identifies stocks in a bullish squeeze on the daily chart."},
-    "bear_Daily_sqz": {"header": "Bearish Daily Squeeze Alerts", "description": "This scan identifies stocks in a bearish squeeze on the daily chart."},
+    "orb_bull": {"header": "Bullish 30m ORB", "description": "Identifies stocks crossing above the 30m opening range."},
+    "orb_bear": {"header": "Bearish 30m ORB", "description": "Identifies stocks crossing below the 30m opening range."},
+    "volume_scan": {"header": "High Volume Scan", "description": "Detects stocks up 2%+ with high volume."},
+    "A+Bull_30m": {"header": "30m A+ Bull Alerts", "description": "Bullish setups on a 30-minute chart."},
+    "tmo_Short": {"header": "Momentum Short", "description": "Short-term overbought stocks for short opportunities."},
+    "tmo_long": {"header": "Momentum Long", "description": "Short-term oversold stocks for long opportunities."},
+    "Long_IT_volume": {"header": "Long High Volume 9EMA", "description": "Stocks with highest volume in 30 days breaking above 9EMA."},
+    "Short_IT_volume": {"header": "Short High Volume 9EMA", "description": "Stocks with highest volume in 30 days breaking below 9EMA."},
+    "bull_Daily_sqz": {"header": "Bullish Daily Squeeze", "description": "Identifies stocks in a bullish squeeze on the daily chart."},
+    "bear_Daily_sqz": {"header": "Bearish Daily Squeeze", "description": "Identifies stocks in a bearish squeeze on the daily chart."}
 }
 
-processed_email_uids = set()
-
+@st.cache_data
 def get_spy_qqq_prices():
-    spy = yf.Ticker("SPY")
-    qqq = yf.Ticker("QQQ")
-    try:
-        spy_price = round(spy.history(period="1d")['Close'].iloc[-1], 2)
-        qqq_price = round(qqq.history(period="1d")['Close'].iloc[-1], 2)
-        return spy_price, qqq_price
-    except Exception as e:
-        st.error(f"Error fetching SPY/QQQ prices: {e}")
-        return None, None
+    """Fetch the latest closing prices for SPY and QQQ."""
+    tickers = yf.download(["SPY", "QQQ"], period="1d")['Close']
+    return round(tickers["SPY"].iloc[-1], 2), round(tickers["QQQ"].iloc[-1], 2)
 
-async def fetch_emails_and_extract(email_address, password, sender_email, keyword):
+def extract_stock_symbols_from_email(email_address, password, sender_email, keyword):
+    """Fetch stock symbols from Thinkorswim alert emails."""
     try:
         mail = imaplib.IMAP4_SSL('imap.gmail.com')
         mail.login(email_address, password)
@@ -57,111 +59,100 @@ async def fetch_emails_and_extract(email_address, password, sender_email, keywor
         _, data = mail.search(None, search_criteria)
 
         stock_data = []
-        for uid in data[0].split():
-            if uid in processed_email_uids:
-                continue
+        for num in data[0].split():
+            if num in processed_email_ids:
+                continue  # Skip already processed emails
 
-            _, data = mail.fetch(uid, '(RFC822)')
-            msg = email.message_from_bytes(data[0][1])
+            _, fetched_data = mail.fetch(num, '(RFC822)')
+            msg = email.message_from_bytes(fetched_data[0][1])
             email_date = parser.parse(msg['Date']).date()
 
             if email_date.weekday() >= 5:  # Skip weekends
                 continue
 
             body = ""
-            if msg.is_multipart():
-                for part in msg.walk():
-                    content_type = part.get_content_type()
-                    if content_type == "text/plain":
-                        body = part.get_payload(decode=True).decode()
-                        break
-                    elif content_type == "text/html" and not body:
-                        html_body = part.get_payload(decode=True).decode()
-                        soup = BeautifulSoup(html_body, "html.parser")
-                        body = soup.get_text()
-            elif msg.get_content_type() == "text/html":
-                html_body = msg.get_payload(decode=True).decode()
-                soup = BeautifulSoup(html_body, "html.parser")
-                body = soup.get_text()
-            else:
-                body = msg.get_payload(decode=True).decode()
+            for part in msg.walk():
+                if part.get_content_type() in ["text/plain", "text/html"]:
+                    body = part.get_payload(decode=True).decode()
+                    if part.get_content_type() == "text/html":
+                        body = BeautifulSoup(body, "html.parser").get_text()
 
-            symbols = re.findall(r'New symbols:\s*([A-Z,\s]+)\s*were added to\s*(' + re.escape(keyword) + ')', body)
+            # Extract symbols
+            symbols = re.findall(r'New symbols:\s*([A-Z,\s]+)\s*were added to\s*' + re.escape(keyword), body)
             if symbols:
                 for symbol_group in symbols:
-                    extracted_symbols = symbol_group[0].replace(" ", "").split(",")
-                    signal_type = symbol_group[1]
-                    for symbol in extracted_symbols:
-                        stock_data.append([symbol, email_date, signal_type])
+                    extracted_symbols = [sym.strip() for sym in symbol_group.split(",") if sym.strip()]
+                    stock_data.extend([[symbol, email_date, keyword] for symbol in extracted_symbols])
 
-            processed_email_uids.add(uid)
+            processed_email_ids.add(num)  # Mark email as processed
 
         mail.close()
         mail.logout()
 
-        df = pd.DataFrame(stock_data, columns=['Ticker', 'Date', 'Signal'])
-        df = df.sort_values(by=['Date', 'Ticker']).drop_duplicates(subset=['Ticker'], keep='last')
-        return df
+        return pd.DataFrame(stock_data, columns=['Ticker', 'Date', 'Signal']).drop_duplicates(subset=['Ticker'])
 
     except Exception as e:
         st.error(f"Error: {e}")
         return pd.DataFrame(columns=['Ticker', 'Date', 'Signal'])
 
 def fetch_stock_prices(df):
-    prices = []
+    """Fetch stock prices for the given tickers."""
+    if df.empty:
+        return df
+
     today = datetime.date.today()
+    if today.weekday() >= 5:  # Adjust if it's a weekend
+        today -= datetime.timedelta(days=today.weekday() - 4)
 
-    if today.weekday() >= 5:
-        today = today - datetime.timedelta(days=today.weekday() - 4)
+    tickers = df['Ticker'].unique()
+    stock_data = yf.download(tickers, start=df['Date'].min(), end=today, group_by='ticker')['Close']
 
+    prices = []
     for _, row in df.iterrows():
         ticker = row['Ticker']
-        alert_date = row['Date']
-        try:
-            stock = yf.Ticker(ticker)
+        alert_price = stock_data.get(ticker, {}).get(row['Date'], None)
+        today_price = stock_data.get(ticker, {}).get(today, None)
 
-            hist_alert = stock.history(start=alert_date, end=alert_date + datetime.timedelta(days=1))
-            alert_price = round(hist_alert['Close'].iloc[0], 2) if not hist_alert.empty else None
+        rate_of_return = ((today_price - alert_price) / alert_price * 100) if alert_price and today_price else None
+        prices.append([ticker, row['Date'], alert_price, today_price, rate_of_return, row['Signal']])
 
-            hist_today = stock.history(period="1d")
-            if not hist_today.empty:
-                today_price = round(hist_today['Close'].iloc[-1], 2)
-            else:
-                hist_recent = stock.history(period="1mo")
-                today_price = round(hist_recent['Close'].iloc[-1], 2) if not hist_recent.empty else None
-
-            if alert_price and today_price:
-                rate_of_return = ((today_price - alert_price) / alert_price) * 100
-            else:
-                rate_of_return = None
-
-            prices.append([ticker, alert_date, alert_price, today_price, rate_of_return, row['Signal']])
-        except Exception as e:
-            st.error(f"Error fetching data for {ticker}: {e}")
-            prices.append([ticker, alert_date, None, None, None, row['Signal']])
-
-    price_df = pd.DataFrame(prices, columns=['Symbol', 'Alert Date', 'Alert Date Close', 'Today Close', 'Return Alert(%)', 'Signal'])
-    price_df = price_df.sort_values(by='Alert Date', ascending=False)
-    return price_df
-
-
-@st.cache_data(ttl=POLL_INTERVAL)
-async def get_all_data():
-    results = {}
-    for keyword in KEYWORDS:
-        results[keyword] = await fetch_emails_and_extract(EMAIL_ADDRESS, EMAIL_PASSWORD, SENDER_EMAIL, keyword)
-    return results
+    return pd.DataFrame(prices, columns=['Symbol', 'Alert Date', 'Alert Close', 'Today Close', 'Return (%)', 'Signal'])
 
 def main():
     st.title("Thinkorswim Alerts Analyzer")
+    st.write("This app polls your Thinkorswim alerts and analyzes stock data for different keywords.")
+
     button(username="tosalerts33", floating=False, width=221)
 
+    # Fetch SPY and QQQ prices
     spy_price, qqq_price = get_spy_qqq_prices()
-    if spy_price is not None and qqq_price is not None:
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("SPY Latest Close Price", f"<span class=\"math-inline\">\\{spy_price\\}</span>")
-with col2\:
-st\.metric\("QQQ Latest Close Price", f"</span>{qqq_price}")
+    col1, col2 = st.columns(2)
+    col1.metric("SPY Latest Close", f"${spy_price}")
+    col2.metric("QQQ Latest Close", f"${qqq_price}")
 
-    if st.button("Refresh Data"):
+    with st.spinner("Polling alerts and analyzing data..."):
+        for keyword in KEYWORDS:
+            tooltip = TOOLTIPS.get(keyword, {"header": keyword, "description": "No description available."})
+            st.markdown(f"### {tooltip['header']} ℹ️")
+            st.caption(tooltip["description"])
+
+            symbols_df = extract_stock_symbols_from_email(EMAIL_ADDRESS, EMAIL_PASSWORD, SENDER_EMAIL, keyword)
+            if not symbols_df.empty:
+                price_df = fetch_stock_prices(symbols_df)
+                st.dataframe(price_df)
+
+                # Download button for CSV
+                csv = price_df.to_csv(index=False).encode('utf-8')
+                st.download_button(f"Download {tooltip['header']} Data", csv, f"{keyword}_alerts.csv", "text/csv")
+            else:
+                st.warning(f"No new stock found for {keyword}.")
+
+    st.markdown("---")
+    st.markdown("### Disclaimer")
+    st.markdown("This tool is for informational purposes only and is not financial advice. Use at your own risk.")
+
+    time.sleep(POLL_INTERVAL)
+    st.rerun()
+
+if __name__ == "__main__":
+    main()
