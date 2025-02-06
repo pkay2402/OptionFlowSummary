@@ -3,7 +3,7 @@ from streamlit_extras.buy_me_a_coffee import button
 import imaplib
 import email
 import re
-import datetime
+from datetime import datetime, timedelta
 import pandas as pd
 from dateutil import parser
 import yfinance as yf
@@ -25,100 +25,118 @@ KEYWORDS = [
     "Long_IT_volume", "Short_IT_volume", "bull_Daily_sqz", "bear_Daily_sqz"
 ]
 
-# Track processed email IDs
-processed_email_ids = set()
-
-# Tooltip descriptions
-TOOLTIPS = {
-    "orb_bull": {"header": "Bullish 30m ORB", "description": "Identifies stocks crossing above the 30m opening range."},
-    "orb_bear": {"header": "Bearish 30m ORB", "description": "Identifies stocks crossing below the 30m opening range."},
-    "volume_scan": {"header": "High Volume Scan", "description": "Detects stocks up 2%+ with high volume."},
-    "A+Bull_30m": {"header": "30m A+ Bull Alerts", "description": "Bullish setups on a 30-minute chart."},
-    "tmo_Short": {"header": "Momentum Short", "description": "Short-term overbought stocks for short opportunities."},
-    "tmo_long": {"header": "Momentum Long", "description": "Short-term oversold stocks for long opportunities."},
-    "Long_IT_volume": {"header": "Long High Volume 9EMA", "description": "Stocks with highest volume in 30 days breaking above 9EMA."},
-    "Short_IT_volume": {"header": "Short High Volume 9EMA", "description": "Stocks with highest volume in 30 days breaking below 9EMA."},
-    "bull_Daily_sqz": {"header": "Bullish Daily Squeeze", "description": "Identifies stocks in a bullish squeeze on the daily chart."},
-    "bear_Daily_sqz": {"header": "Bearish Daily Squeeze", "description": "Identifies stocks in a bearish squeeze on the daily chart."}
-}
-
+@st.cache_data(ttl=300)  # Cache for 5 minutes
 def get_spy_qqq_prices():
     """Fetch the latest closing prices for SPY and QQQ."""
-    spy = yf.Ticker("SPY")
-    qqq = yf.Ticker("QQQ")
-    
-    spy_price = round(spy.history(period="1d")['Close'].iloc[-1], 2)
-    qqq_price = round(qqq.history(period="1d")['Close'].iloc[-1], 2)
-    
-    return spy_price, qqq_price
+    try:
+        spy = yf.Ticker("SPY")
+        qqq = yf.Ticker("QQQ")
+        
+        spy_price = round(spy.history(period="1d")['Close'].iloc[-1], 2)
+        qqq_price = round(qqq.history(period="1d")['Close'].iloc[-1], 2)
+        
+        return spy_price, qqq_price
+    except Exception as e:
+        st.error(f"Error fetching market prices: {e}")
+        return None, None
 
+@st.cache_data(ttl=300)  # Cache for 5 minutes
 def fetch_stock_prices(df):
+    if df.empty:
+        return pd.DataFrame(columns=['Ticker', 'Latest Price'])
+        
     prices = []
     for symbol in df['Ticker']:
         try:
             ticker = yf.Ticker(symbol)
             latest_price = ticker.history(period="1d")['Close'].iloc[-1]
             prices.append({'Ticker': symbol, 'Latest Price': round(latest_price, 2)})
+            time.sleep(0.1)  # Rate limiting
         except Exception as e:
-            prices.append({'Ticker': symbol, 'Latest Price': 'Error'})
             st.warning(f"Failed to fetch price for {symbol}: {e}")
+            prices.append({'Ticker': symbol, 'Latest Price': None})
+    
     return pd.DataFrame(prices)
 
-def extract_stock_symbols_from_email(email_address, password, sender_email, keyword):
+def connect_to_email():
+    """Establish IMAP connection with error handling."""
     try:
         mail = imaplib.IMAP4_SSL('imap.gmail.com')
-        mail.login(email_address, password)
-        mail.select('inbox')
+        mail.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+        return mail
+    except imaplib.IMAP4.error as e:
+        st.error(f"IMAP connection error: {e}")
+        return None
+    except Exception as e:
+        st.error(f"Unexpected error connecting to email: {e}")
+        return None
 
-        date_since = (datetime.date.today() - datetime.timedelta(days=2)).strftime("%d-%b-%Y")
+def extract_stock_symbols_from_email(email_address, password, sender_email, keyword):
+    mail = connect_to_email()
+    if not mail:
+        return pd.DataFrame(columns=['Ticker', 'Date', 'Signal'])
+
+    try:
+        mail.select('inbox')
+        date_since = (datetime.now() - timedelta(days=2)).strftime("%d-%b-%Y")
         search_criteria = f'(FROM "{sender_email}" SUBJECT "{keyword}" SINCE "{date_since}")'
         _, data = mail.search(None, search_criteria)
 
         stock_data = []
+        processed_email_ids = set()  # Move inside function to avoid global state
+
         for num in data[0].split():
             if num in processed_email_ids:
-                continue  # Skip already processed emails
+                continue
 
-            _, data = mail.fetch(num, '(RFC822)')
-            msg = email.message_from_bytes(data[0][1])
-            email_date = parser.parse(msg['Date']).date()
+            _, msg_data = mail.fetch(num, '(RFC822)')
+            email_msg = email.message_from_bytes(msg_data[0][1])
+            email_date = parser.parse(email_msg['Date']).date()
             
             if email_date.weekday() >= 5:  # Skip weekends
                 continue
 
-            if msg.is_multipart():
-                for part in msg.walk():
-                    if part.get_content_type() == "text/plain":
-                        # Plain text version of the email
-                        body = part.get_payload(decode=True).decode()
-                    elif part.get_content_type() == "text/html":
-                        # HTML version of the email
-                        html_body = part.get_payload(decode=True).decode()
-                        # Use BeautifulSoup to extract text from HTML
-                        soup = BeautifulSoup(html_body, "html.parser")
-                        body = soup.get_text()
+            body = ""
+            if email_msg.is_multipart():
+                for part in email_msg.walk():
+                    if part.get_content_type() in ["text/plain", "text/html"]:
+                        payload = part.get_payload(decode=True).decode()
+                        if part.get_content_type() == "text/html":
+                            soup = BeautifulSoup(payload, "html.parser")
+                            body = soup.get_text()
+                        else:
+                            body = payload
+                        break
             else:
-                # If the email is not multipart, check if it's HTML
-                if msg.get_content_type() == "text/html":
-                    html_body = msg.get_payload(decode=True).decode()
-                    soup = BeautifulSoup(html_body, "html.parser")
+                payload = email_msg.get_payload(decode=True).decode()
+                if email_msg.get_content_type() == "text/html":
+                    soup = BeautifulSoup(payload, "html.parser")
                     body = soup.get_text()
                 else:
-                    body = msg.get_payload(decode=True).decode()
+                    body = payload
 
-            # Extract symbols using regex
             symbols = re.findall(r'New symbols:\s*([A-Z,\s]+)\s*were added to\s*(' + re.escape(keyword) + ')', body)
             if symbols:
                 for symbol_group in symbols:
-                    extracted_symbols = symbol_group[0].replace(" ", "").split(",")
-                    signal_type = symbol_group[1]
+                    extracted_symbols = [s.strip() for s in symbol_group[0].split(",") if s.strip()]
                     for symbol in extracted_symbols:
-                        stock_data.append([symbol, email_date, signal_type])
+                        stock_data.append([symbol, email_date, symbol_group[1]])
 
-            processed_email_ids.add(num)  # Mark email as processed
+            processed_email_ids.add(num)
 
-        mail.close()
-        mail.logout()
+        return pd.DataFrame(stock_data, columns=['Ticker', 'Date', 'Signal']).drop_duplicates(subset=['Ticker'], keep='last')
+
+    except Exception as e:
+        st.error(f"Error processing emails: {e}")
+        return pd.DataFrame(columns=['Ticker', 'Date', 'Signal'])
+    finally:
+        try:
+            mail.close()
+            mail.logout()
+        except:
+            pass
+
+# ... rest of the code remains the same ...
 
         df = pd.DataFrame(stock_data, columns=['Ticker', 'Date', 'Signal'])
         df = df.sort_values(by=['Date', 'Ticker']).drop_duplicates(subset=['Ticker'], keep='last')
