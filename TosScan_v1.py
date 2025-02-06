@@ -95,29 +95,6 @@ def extract_stock_symbols_from_email(email_address, password, sender_email, keyw
         st.error(f"Error: {e}")
         return pd.DataFrame(columns=['Ticker', 'Date', 'Signal'])
 
-def fetch_spy_qqq_prices():
-    """Fetch SPY and QQQ closing prices with error handling."""
-    today = (datetime.datetime.today() - BDay(1)).date()  # Adjust for weekends/holidays
-    spy_qqq = ['SPY', 'QQQ']
-
-    try:
-        data = yf.download(spy_qqq, start=today - datetime.timedelta(days=7), end=today)
-        
-        # Check if 'Close' exists before accessing
-        if 'Close' in data:
-            return data['Close'].to_dict()
-        else:
-            st.warning("Yahoo Finance data doesn't contain 'Close' prices.")
-            return {}
-
-    except Exception as e:
-        st.warning(f"Error fetching SPY/QQQ data: {e}")
-        return {}
-
-    prices = []
-    for _, row in df.iterrows():
-        prices.append([row['Ticker'], row['Date'], row['Signal']])
-
     return pd.DataFrame(prices, columns=['Symbol', 'Alert Date', 'Signal'])
 
 
