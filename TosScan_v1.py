@@ -97,15 +97,24 @@ def extract_stock_symbols_from_email(email_address, password, sender_email, keyw
 
 def fetch_stock_prices(df):
     """Fetch stock prices for the given tickers."""
-    if df.empty:
-        return df
+    if df.empty or df['Ticker'].nunique() == 0:
+        return pd.DataFrame(columns=['Symbol', 'Alert Date', 'Alert Close', 'Today Close', 'Return (%)', 'Signal'])
 
-    today = datetime.date.today()
-    if today.weekday() >= 5:  # Adjust if it's a weekend
-        today -= datetime.timedelta(days=today.weekday() - 4)
+    from pandas.tseries.offsets import BDay
+    today = (datetime.datetime.today() - BDay(1)).date()  # Adjust for weekends/holidays
 
-    tickers = df['Ticker'].unique()
-    stock_data = yf.download(tickers, start=df['Date'].min(), end=today, group_by='ticker')['Close']
+    tickers = df['Ticker'].dropna().unique().tolist()
+    if not tickers:
+        return pd.DataFrame(columns=['Symbol', 'Alert Date', 'Alert Close', 'Today Close', 'Return (%)', 'Signal'])
+
+    stock_data = {}
+    for i in range(0, len(tickers), 10):  # Batch processing
+        batch = tickers[i:i + 10]
+        try:
+            data = yf.download(batch, start=df['Date'].min(), end=today, group_by='ticker')['Close']
+            stock_data.update(data.to_dict())
+        except Exception as e:
+            st.warning(f"Error fetching data for {batch}: {e}")
 
     prices = []
     for _, row in df.iterrows():
@@ -117,6 +126,7 @@ def fetch_stock_prices(df):
         prices.append([ticker, row['Date'], alert_price, today_price, rate_of_return, row['Signal']])
 
     return pd.DataFrame(prices, columns=['Symbol', 'Alert Date', 'Alert Close', 'Today Close', 'Return (%)', 'Signal'])
+
 
 def main():
     st.title("Thinkorswim Alerts Analyzer")
