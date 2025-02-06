@@ -18,46 +18,27 @@ EMAIL_PASSWORD = st.secrets["EMAIL_PASSWORD"]
 POLL_INTERVAL = 600  # 10 minutes in seconds
 SENDER_EMAIL = "alerts@thinkorswim.com"
 
-# Keywords to search for in email subjects
-KEYWORDS = ["volume_scan", "A+Bull_30m", "tmo_long", "tmo_Short", "Long_IT_volume", "Short_IT_volume", "bull_Daily_sqz", "bear_Daily_sqz"]  # Add more keywords as needed
+# Keywords for email subjects
+KEYWORDS = [
+    "orb_bull", "orb_bear", "volume_scan", "A+Bull_30m", "tmo_long", "tmo_Short",
+    "Long_IT_volume", "Short_IT_volume", "bull_Daily_sqz", "bear_Daily_sqz"
+]
 
-# Track processed email IDs to avoid duplicates
+# Track processed email IDs
 processed_email_ids = set()
 
-# Custom Tooltip descriptions for each keyword
+# Tooltip descriptions
 TOOLTIPS = {
-    "volume_scan": {
-        "header": "Bullish Intraday high volume",
-        "description": "This scan identifies high volume stocks that have very high volume and stock is up at least 2%."
-    },
-    "A+Bull_30m": {
-        "header": "30mins A+Bull Alerts",
-        "description": "This scan identifies bullish setups on a 30-minute chart. Typically I use it to play move 2 weeks out."
-    },
-    "tmo_Short": {
-        "header": "Momentum Short Alerts",
-        "description": "This scan identifies short-term overbought conditions for potential short opportunities."
-    },
-    "tmo_long": {
-        "header": "Momentum Long Alerts",
-        "description": "This scan identifies short-term oversold conditions for potential long opportunities."
-    },
-    "Long_IT_volume": {
-        "header": "Long High Volume 9EMA Alerts",
-        "description": "This scan looks for stocks with highest volume in last 30 days and breaking up above 9ema."
-    },
-    "Short_IT_volume": {
-        "header": "Short High Volume 9EMA Alerts",
-        "description": "This scan looks for stocks with highest volume in last 30 days and breaking down below 9ema."
-    },
-    "bull_Daily_sqz": {
-        "header": "Bullish Daily Squeeze Alerts",
-        "description": "This scan identifies stocks in a bullish squeeze on the daily chart."
-    },
-    "bear_Daily_sqz": {
-        "header": "Bearish Daily Squeeze Alerts",
-        "description": "This scan identifies stocks in a bearish squeeze on the daily chart."
-    }
+    "orb_bull": {"header": "Bullish 30m ORB", "description": "Identifies stocks crossing above the 30m opening range."},
+    "orb_bear": {"header": "Bearish 30m ORB", "description": "Identifies stocks crossing below the 30m opening range."},
+    "volume_scan": {"header": "High Volume Scan", "description": "Detects stocks up 2%+ with high volume."},
+    "A+Bull_30m": {"header": "30m A+ Bull Alerts", "description": "Bullish setups on a 30-minute chart."},
+    "tmo_Short": {"header": "Momentum Short", "description": "Short-term overbought stocks for short opportunities."},
+    "tmo_long": {"header": "Momentum Long", "description": "Short-term oversold stocks for long opportunities."},
+    "Long_IT_volume": {"header": "Long High Volume 9EMA", "description": "Stocks with highest volume in 30 days breaking above 9EMA."},
+    "Short_IT_volume": {"header": "Short High Volume 9EMA", "description": "Stocks with highest volume in 30 days breaking below 9EMA."},
+    "bull_Daily_sqz": {"header": "Bullish Daily Squeeze", "description": "Identifies stocks in a bullish squeeze on the daily chart."},
+    "bear_Daily_sqz": {"header": "Bearish Daily Squeeze", "description": "Identifies stocks in a bearish squeeze on the daily chart."}
 }
 
 def get_spy_qqq_prices():
