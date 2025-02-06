@@ -52,6 +52,18 @@ def get_spy_qqq_prices():
     
     return spy_price, qqq_price
 
+def fetch_stock_prices(df):
+    prices = []
+    for symbol in df['Ticker']:
+        try:
+            ticker = yf.Ticker(symbol)
+            latest_price = ticker.history(period="1d")['Close'].iloc[-1]
+            prices.append({'Ticker': symbol, 'Latest Price': round(latest_price, 2)})
+        except Exception as e:
+            prices.append({'Ticker': symbol, 'Latest Price': 'Error'})
+            st.warning(f"Failed to fetch price for {symbol}: {e}")
+    return pd.DataFrame(prices)
+
 def extract_stock_symbols_from_email(email_address, password, sender_email, keyword):
     try:
         mail = imaplib.IMAP4_SSL('imap.gmail.com')
@@ -212,17 +224,20 @@ def main():
                         # Extract and process data for the current keyword
                         symbols_df = extract_stock_symbols_from_email(EMAIL_ADDRESS, EMAIL_PASSWORD, SENDER_EMAIL, keyword)
                         if not symbols_df.empty:
+                            # Fetch prices for each symbol
+                            price_df = fetch_stock_prices(symbols_df)
+                            # Merge the fetched prices with the original dataframe
+                            merged_df = symbols_df.merge(price_df, on='Ticker', how='left')
+                            
                             # Create a collapsible component for each table
                             with st.expander(f"Show {tooltip_data['header']} Data"):
-                                # Modify the dataframe to include hyperlinks
-                                symbols_df['Ticker'] = symbols_df['Ticker'].apply(lambda x: f"[{x}]({x})")
-                                st.dataframe(symbols_df)
-                                # Display the dataframe with clickable links
-                                for index, row in symbols_df.iterrows():
-                                    if st.button(row['Ticker'].strip('[]'), key=f"{row['Ticker']}_{keyword}"):
-                                        plot_intraday_chart(row['Ticker'].strip('[]'))
+                                st.dataframe(merged_df)
+                                # Display the dataframe with clickable links for chart viewing
+                                for index, row in merged_df.iterrows():
+                                    if st.button(row['Ticker'], key=f"{row['Ticker']}_{keyword}"):
+                                        plot_intraday_chart(row['Ticker'])
                                 # Add a download button for CSV inside the expander
-                                csv = symbols_df.to_csv(index=False).encode('utf-8')
+                                csv = merged_df.to_csv(index=False).encode('utf-8')
                                 st.download_button(
                                     label=f"Download {tooltip_data['header']} Data as CSV",
                                     data=csv,
