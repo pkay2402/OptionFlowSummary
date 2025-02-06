@@ -95,7 +95,58 @@ def extract_stock_symbols_from_email(email_address, password, sender_email, keyw
         st.error(f"Error: {e}")
         return pd.DataFrame(columns=['Ticker', 'Date', 'Signal'])
 
-    return pd.DataFrame(prices, columns=['Symbol', 'Alert Date', 'Signal'])
+    def fetch_stock_prices(df):
+    prices = []
+    today = datetime.date.today()
+    
+    # Adjust today's date if it's a weekend
+    if today.weekday() >= 5:  # Saturday (5) or Sunday (6)
+        today = today - datetime.timedelta(days=today.weekday() - 4)  # Set to Friday
+
+    for index, row in df.iterrows():
+        ticker = row['Ticker']
+        alert_date = row['Date']
+        try:
+            stock = yf.Ticker(ticker)
+            
+            # Fetch alert date close price
+            hist_alert = stock.history(start=alert_date, end=alert_date + datetime.timedelta(days=1))
+            alert_price = round(hist_alert['Close'].iloc[0], 2) if not hist_alert.empty else None
+            
+            # Fetch latest close price (even if market is closed)
+            hist_today = stock.history(period="1d")  # Fetch the latest available data
+            if not hist_today.empty:
+                today_price = round(hist_today['Close'].iloc[-1], 2)
+            else:
+                # If today's data is unavailable, fetch the most recent historical data
+                hist_recent = stock.history(period="1mo")  # Fetch last month's data
+                today_price = round(hist_recent['Close'].iloc[-1], 2) if not hist_recent.empty else None
+            
+            # Calculate the rate of return (if both prices are available)
+            if alert_price and today_price:
+                rate_of_return = ((today_price - alert_price) / alert_price) * 100
+            else:
+                rate_of_return = None
+
+            prices.append([ticker, alert_date, alert_price, today_price, rate_of_return, row['Signal']])
+        except Exception as e:
+            st.error(f"Error fetching data for {ticker}: {e}")
+            prices.append([ticker, alert_date, None, None, None, row['Signal']])
+    
+    # Customize the column names here
+    price_df = pd.DataFrame(prices, columns=[
+        'Symbol', 
+        'Alert Date', 
+        'Alert Date Close', 
+        'Today Close', 
+        'Return Alert(%)', 
+        'Signal'
+    ])
+    
+    # Sort by Alert Date (latest first)
+    price_df = price_df.sort_values(by='Alert Date', ascending=False)
+    
+    return price_df
 
 
 def main():
