@@ -69,12 +69,12 @@ if symbol:
         x0=df.index[0], x1=df.index[-1], y0=value, y1=value,
         line=dict(color=colors[level], dash="dot"),
         xref="x", yref="y"
-    )
+        )
         fig.add_annotation(
         x=df.index[-1], y=value, text=level, showarrow=False,
         font=dict(color=colors[level]), align="right",
         xanchor="left", yanchor="middle"
-    )
+        )
 
 
         # RSI Plot
