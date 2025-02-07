@@ -60,11 +60,22 @@ if symbol:
         fig.add_trace(go.Scatter(x=df.index, y=df['50_MA'], mode="lines", name="MA 50", line=dict(color="blue")), row=1, col=1)
 
         # Pivot points
-        fig.add_hline(y=PP, line_dash="dot", line_color="black", annotation_text="Pivot", annotation_position="right", row=1, col=1)
-        fig.add_hline(y=R1, line_dash="dot", line_color="green", annotation_text="R1", annotation_position="right", row=1, col=1)
-        fig.add_hline(y=R2, line_dash="dot", line_color="green", annotation_text="R2", annotation_position="right", row=1, col=1)
-        fig.add_hline(y=S1, line_dash="dot", line_color="red", annotation_text="S1", annotation_position="right", row=1, col=1)
-        fig.add_hline(y=S2, line_dash="dot", line_color="red", annotation_text="S2", annotation_position="right", row=1, col=1)
+        pivot_levels = {"Pivot": PP, "R1": R1, "R2": R2, "S1": S1, "S2": S2}
+        colors = {"Pivot": "black", "R1": "green", "R2": "green", "S1": "red", "S2": "red"}
+
+        for level, value in pivot_levels.items():
+        fig.add_shape(
+        type="line",
+        x0=df.index[0], x1=df.index[-1], y0=value, y1=value,
+        line=dict(color=colors[level], dash="dot"),
+        xref="x", yref="y"
+    )
+        fig.add_annotation(
+        x=df.index[-1], y=value, text=level, showarrow=False,
+        font=dict(color=colors[level]), align="right",
+        xanchor="left", yanchor="middle"
+    )
+
 
         # RSI Plot
         fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], mode="lines", name="RSI", line=dict(color="blue")), row=2, col=1)
