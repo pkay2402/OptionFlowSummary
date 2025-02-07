@@ -160,40 +160,68 @@ def plot_intraday_chart(symbol, interval='5m'):
         # Calculate 9 EMA
         data['9EMA'] = data['Close'].ewm(span=9, adjust=False).mean()
 
-        # First 30 minutes of the trading day
-        start_time = data.index[0].replace(hour=9, minute=30)
-        end_time = start_time + timedelta(minutes=30)
-        
-        first_30_mins = data[(data.index >= start_time) & (data.index <= end_time)]
-        
-        high_30m = first_30_mins['High'].max() if not first_30_mins.empty else None
-        low_30m = first_30_mins['Low'].min() if not first_30_mins.empty else None
+        # Get market open time (assuming EST/EDT)
+        try:
+            start_time = data.index[0].replace(hour=9, minute=30)
+            end_time = start_time + timedelta(minutes=30)
+            
+            first_30_mins = data[(data.index >= start_time) & (data.index <= end_time)]
+            
+            high_30m = first_30_mins['High'].max() if not first_30_mins.empty else None
+            low_30m = first_30_mins['Low'].min() if not first_30_mins.empty else None
+        except IndexError:
+            st.warning("Not enough data for first 30 minutes calculation")
+            high_30m = None
+            low_30m = None
 
         # Create Plotly figure
         fig = go.Figure()
 
         # Candlestick chart
         fig.add_trace(go.Candlestick(x=data.index,
-                                     open=data['Open'],
-                                     high=data['High'],
-                                     low=data['Low'],
-                                     close=data['Close'],
-                                     name='Market Data'))
+                                   open=data['Open'],
+                                   high=data['High'],
+                                   low=data['Low'],
+                                   close=data['Close'],
+                                   name='Market Data'))
 
         # Plot 9 EMA
-        fig.add_trace(go.Scatter(x=data.index, y=data['9EMA'], mode='lines', name='9 EMA', line=dict(color='blue', width=2)))
+        fig.add_trace(go.Scatter(x=data.index, 
+                               y=data['9EMA'], 
+                               mode='lines', 
+                               name='9 EMA', 
+                               line=dict(color='blue', width=2)))
 
-        # Plot first 30 minutes high and low
+        # Plot first 30 minutes high and low if available
         if high_30m:
-            fig.add_hline(y=high_30m, line_width=1, line_dash="dash", line_color="green", annotation_text="30m High")
+            fig.add_hline(y=high_30m, 
+                         line_width=1, 
+                         line_dash="dash", 
+                         line_color="green", 
+                         annotation_text="30m High")
         if low_30m:
-            fig.add_hline(y=low_30m, line_width=1, line_dash="dash", line_color="red", annotation_text="30m Low")
+            fig.add_hline(y=low_30m, 
+                         line_width=1, 
+                         line_dash="dash", 
+                         line_color="red", 
+                         annotation_text="30m Low")
 
-        fig.update_layout(title=f'{symbol} - {interval} Intraday Chart', xaxis_title='Time', yaxis_title='Price', xaxis_rangeslider_visible=False)
-        st.plotly_chart(fig)
+        # Update layout with better styling
+        fig.update_layout(
+            title=f'{symbol} - {interval} Intraday Chart',
+            xaxis_title='Time',
+            yaxis_title='Price',
+            xaxis_rangeslider_visible=False,
+            template='plotly_white',  # Clean template
+            height=600,  # Fixed height
+            margin=dict(t=30, b=30, l=30, r=30)
+        )
+
+        # Show the chart
+        st.plotly_chart(fig, use_container_width=True)
 
     except Exception as e:
-        st.error(f"An error occurred while plotting {symbol}: {e}")
+        st.error(f"An error occurred while plotting {symbol}: {str(e)}")
 
 def main():
     st.title("Thinkorswim Alerts Analyzer")
