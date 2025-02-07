@@ -3,13 +3,12 @@ from streamlit_extras.buy_me_a_coffee import button
 import imaplib
 import email
 import re
-from datetime import datetime, timedelta
+import datetime
 import pandas as pd
 from dateutil import parser
 import yfinance as yf
 import time
 from bs4 import BeautifulSoup
-import plotly.graph_objects as go
 
 # Fetch credentials from Streamlit Secrets
 EMAIL_ADDRESS = st.secrets["EMAIL_ADDRESS"]
@@ -25,118 +24,88 @@ KEYWORDS = [
     "Long_IT_volume", "Short_IT_volume", "bull_Daily_sqz", "bear_Daily_sqz"
 ]
 
-@st.cache_data(ttl=300)  # Cache for 5 minutes
+# Track processed email IDs
+processed_email_ids = set()
+
+# Tooltip descriptions
+TOOLTIPS = {
+    "orb_bull": {"header": "Bullish 30m ORB", "description": "Identifies stocks crossing above the 30m opening range."},
+    "orb_bear": {"header": "Bearish 30m ORB", "description": "Identifies stocks crossing below the 30m opening range."},
+    "volume_scan": {"header": "High Volume Scan", "description": "Detects stocks up 2%+ with high volume."},
+    "A+Bull_30m": {"header": "30m A+ Bull Alerts", "description": "Bullish setups on a 30-minute chart."},
+    "tmo_Short": {"header": "Momentum Short", "description": "Short-term overbought stocks for short opportunities."},
+    "tmo_long": {"header": "Momentum Long", "description": "Short-term oversold stocks for long opportunities."},
+    "Long_IT_volume": {"header": "Long High Volume 9EMA", "description": "Stocks with highest volume in 30 days breaking above 9EMA."},
+    "Short_IT_volume": {"header": "Short High Volume 9EMA", "description": "Stocks with highest volume in 30 days breaking below 9EMA."},
+    "bull_Daily_sqz": {"header": "Bullish Daily Squeeze", "description": "Identifies stocks in a bullish squeeze on the daily chart."},
+    "bear_Daily_sqz": {"header": "Bearish Daily Squeeze", "description": "Identifies stocks in a bearish squeeze on the daily chart."}
+}
+
 def get_spy_qqq_prices():
     """Fetch the latest closing prices for SPY and QQQ."""
-    try:
-        spy = yf.Ticker("SPY")
-        qqq = yf.Ticker("QQQ")
-        
-        spy_price = round(spy.history(period="1d")['Close'].iloc[-1], 2)
-        qqq_price = round(qqq.history(period="1d")['Close'].iloc[-1], 2)
-        
-        return spy_price, qqq_price
-    except Exception as e:
-        st.error(f"Error fetching market prices: {e}")
-        return None, None
-
-@st.cache_data(ttl=300)  # Cache for 5 minutes
-def fetch_stock_prices(df):
-    if df.empty:
-        return pd.DataFrame(columns=['Ticker', 'Latest Price'])
-        
-    prices = []
-    for symbol in df['Ticker']:
-        try:
-            ticker = yf.Ticker(symbol)
-            latest_price = ticker.history(period="1d")['Close'].iloc[-1]
-            prices.append({'Ticker': symbol, 'Latest Price': round(latest_price, 2)})
-            time.sleep(0.1)  # Rate limiting
-        except Exception as e:
-            st.warning(f"Failed to fetch price for {symbol}: {e}")
-            prices.append({'Ticker': symbol, 'Latest Price': None})
+    spy = yf.Ticker("SPY")
+    qqq = yf.Ticker("QQQ")
     
-    return pd.DataFrame(prices)
-
-def connect_to_email():
-    """Establish IMAP connection with error handling."""
-    try:
-        mail = imaplib.IMAP4_SSL('imap.gmail.com')
-        mail.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-        return mail
-    except imaplib.IMAP4.error as e:
-        st.error(f"IMAP connection error: {e}")
-        return None
-    except Exception as e:
-        st.error(f"Unexpected error connecting to email: {e}")
-        return None
+    spy_price = round(spy.history(period="1d")['Close'].iloc[-1], 2)
+    qqq_price = round(qqq.history(period="1d")['Close'].iloc[-1], 2)
+    
+    return spy_price, qqq_price
 
 def extract_stock_symbols_from_email(email_address, password, sender_email, keyword):
-    mail = connect_to_email()
-    if not mail:
-        return pd.DataFrame(columns=['Ticker', 'Date', 'Signal'])
-
     try:
+        mail = imaplib.IMAP4_SSL('imap.gmail.com')
+        mail.login(email_address, password)
         mail.select('inbox')
-        date_since = (datetime.now() - timedelta(days=2)).strftime("%d-%b-%Y")
+
+        date_since = (datetime.date.today() - datetime.timedelta(days=2)).strftime("%d-%b-%Y")
         search_criteria = f'(FROM "{sender_email}" SUBJECT "{keyword}" SINCE "{date_since}")'
         _, data = mail.search(None, search_criteria)
 
         stock_data = []
-        processed_email_ids = set()  # Move inside function to avoid global state
-
         for num in data[0].split():
             if num in processed_email_ids:
-                continue
+                continue  # Skip already processed emails
 
-            _, msg_data = mail.fetch(num, '(RFC822)')
-            email_msg = email.message_from_bytes(msg_data[0][1])
-            email_date = parser.parse(email_msg['Date']).date()
+            _, data = mail.fetch(num, '(RFC822)')
+            msg = email.message_from_bytes(data[0][1])
+            email_date = parser.parse(msg['Date']).date()
             
             if email_date.weekday() >= 5:  # Skip weekends
                 continue
 
-            body = ""
-            if email_msg.is_multipart():
-                for part in email_msg.walk():
-                    if part.get_content_type() in ["text/plain", "text/html"]:
-                        payload = part.get_payload(decode=True).decode()
-                        if part.get_content_type() == "text/html":
-                            soup = BeautifulSoup(payload, "html.parser")
-                            body = soup.get_text()
-                        else:
-                            body = payload
-                        break
+            if msg.is_multipart():
+                for part in msg.walk():
+                    if part.get_content_type() == "text/plain":
+                        # Plain text version of the email
+                        body = part.get_payload(decode=True).decode()
+                    elif part.get_content_type() == "text/html":
+                        # HTML version of the email
+                        html_body = part.get_payload(decode=True).decode()
+                        # Use BeautifulSoup to extract text from HTML
+                        soup = BeautifulSoup(html_body, "html.parser")
+                        body = soup.get_text()
             else:
-                payload = email_msg.get_payload(decode=True).decode()
-                if email_msg.get_content_type() == "text/html":
-                    soup = BeautifulSoup(payload, "html.parser")
+                # If the email is not multipart, check if it's HTML
+                if msg.get_content_type() == "text/html":
+                    html_body = msg.get_payload(decode=True).decode()
+                    soup = BeautifulSoup(html_body, "html.parser")
                     body = soup.get_text()
                 else:
-                    body = payload
+                    body = msg.get_payload(decode=True).decode()
 
+            # Extract symbols using regex
             symbols = re.findall(r'New symbols:\s*([A-Z,\s]+)\s*were added to\s*(' + re.escape(keyword) + ')', body)
             if symbols:
                 for symbol_group in symbols:
-                    extracted_symbols = [s.strip() for s in symbol_group[0].split(",") if s.strip()]
+                    extracted_symbols = symbol_group[0].replace(" ", "").split(",")
+                    signal_type = symbol_group[1]
                     for symbol in extracted_symbols:
-                        stock_data.append([symbol, email_date, symbol_group[1]])
+                        stock_data.append([symbol, email_date, signal_type])
 
-            processed_email_ids.add(num)
+            processed_email_ids.add(num)  # Mark email as processed
 
-        return pd.DataFrame(stock_data, columns=['Ticker', 'Date', 'Signal']).drop_duplicates(subset=['Ticker'], keep='last')
-
-    except Exception as e:
-        st.error(f"Error processing emails: {e}")
-        return pd.DataFrame(columns=['Ticker', 'Date', 'Signal'])
-    finally:
-        try:
-            mail.close()
-            mail.logout()
-        except:
-            pass
-
-# ... rest of the code remains the same ...
+        mail.close()
+        mail.logout()
 
         df = pd.DataFrame(stock_data, columns=['Ticker', 'Date', 'Signal'])
         df = df.sort_values(by=['Date', 'Ticker']).drop_duplicates(subset=['Ticker'], keep='last')
@@ -146,82 +115,6 @@ def extract_stock_symbols_from_email(email_address, password, sender_email, keyw
     except Exception as e:
         st.error(f"Error: {e}")
         return pd.DataFrame(columns=['Ticker', 'Date', 'Signal'])
-
-def plot_intraday_chart(symbol, interval='5m'):
-    try:
-        # Fetch intraday data
-        ticker = yf.Ticker(symbol)
-        data = ticker.history(period='1d', interval=interval)
-
-        if data.empty:
-            st.error(f"No data available for {symbol}")
-            return
-
-        # Calculate 9 EMA
-        data['9EMA'] = data['Close'].ewm(span=9, adjust=False).mean()
-
-        # Get market open time (assuming EST/EDT)
-        try:
-            start_time = data.index[0].replace(hour=9, minute=30)
-            end_time = start_time + timedelta(minutes=30)
-            
-            first_30_mins = data[(data.index >= start_time) & (data.index <= end_time)]
-            
-            high_30m = first_30_mins['High'].max() if not first_30_mins.empty else None
-            low_30m = first_30_mins['Low'].min() if not first_30_mins.empty else None
-        except IndexError:
-            st.warning("Not enough data for first 30 minutes calculation")
-            high_30m = None
-            low_30m = None
-
-        # Create Plotly figure
-        fig = go.Figure()
-
-        # Candlestick chart
-        fig.add_trace(go.Candlestick(x=data.index,
-                                   open=data['Open'],
-                                   high=data['High'],
-                                   low=data['Low'],
-                                   close=data['Close'],
-                                   name='Market Data'))
-
-        # Plot 9 EMA
-        fig.add_trace(go.Scatter(x=data.index, 
-                               y=data['9EMA'], 
-                               mode='lines', 
-                               name='9 EMA', 
-                               line=dict(color='blue', width=2)))
-
-        # Plot first 30 minutes high and low if available
-        if high_30m:
-            fig.add_hline(y=high_30m, 
-                         line_width=1, 
-                         line_dash="dash", 
-                         line_color="green", 
-                         annotation_text="30m High")
-        if low_30m:
-            fig.add_hline(y=low_30m, 
-                         line_width=1, 
-                         line_dash="dash", 
-                         line_color="red", 
-                         annotation_text="30m Low")
-
-        # Update layout with better styling
-        fig.update_layout(
-            title=f'{symbol} - {interval} Intraday Chart',
-            xaxis_title='Time',
-            yaxis_title='Price',
-            xaxis_rangeslider_visible=False,
-            template='plotly_white',  # Clean template
-            height=600,  # Fixed height
-            margin=dict(t=30, b=30, l=30, r=30)
-        )
-
-        # Show the chart
-        st.plotly_chart(fig, use_container_width=True)
-
-    except Exception as e:
-        st.error(f"An error occurred while plotting {symbol}: {str(e)}")
 
 def main():
     st.title("Thinkorswim Alerts Analyzer")
@@ -236,12 +129,8 @@ def main():
     # Display SPY and QQQ prices
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("SPY"):
-            plot_intraday_chart("SPY")
         st.metric("SPY Latest Close Price", f"${spy_price}")
     with col2:
-        if st.button("QQQ"):
-            plot_intraday_chart("QQQ")
         st.metric("QQQ Latest Close Price", f"${qqq_price}")
 
     # Automatically poll emails and update data
@@ -261,8 +150,16 @@ def main():
                         tooltip_data = TOOLTIPS.get(keyword, {"header": keyword, "description": "No description available."})
                         st.markdown(
                             f"""
-                            **{tooltip_data["header"]}** ℹ️  
-                            {tooltip_data["description"]}
+                            
+                            
+
+                                
+{tooltip_data["header"]} ℹ️
+
+
+                                {tooltip_data["description"]}
+                            
+
                             """,
                             unsafe_allow_html=True,
                         )
@@ -270,20 +167,11 @@ def main():
                         # Extract and process data for the current keyword
                         symbols_df = extract_stock_symbols_from_email(EMAIL_ADDRESS, EMAIL_PASSWORD, SENDER_EMAIL, keyword)
                         if not symbols_df.empty:
-                            # Fetch prices for each symbol
-                            price_df = fetch_stock_prices(symbols_df)
-                            # Merge the fetched prices with the original dataframe
-                            merged_df = symbols_df.merge(price_df, on='Ticker', how='left')
-                            
                             # Create a collapsible component for each table
                             with st.expander(f"Show {tooltip_data['header']} Data"):
-                                st.dataframe(merged_df)
-                                # Display the dataframe with clickable links for chart viewing
-                                for index, row in merged_df.iterrows():
-                                    if st.button(row['Ticker'], key=f"{row['Ticker']}_{keyword}"):
-                                        plot_intraday_chart(row['Ticker'])
+                                st.dataframe(symbols_df)
                                 # Add a download button for CSV inside the expander
-                                csv = merged_df.to_csv(index=False).encode('utf-8')
+                                csv = symbols_df.to_csv(index=False).encode('utf-8')
                                 st.download_button(
                                     label=f"Download {tooltip_data['header']} Data as CSV",
                                     data=csv,
