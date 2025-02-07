@@ -116,61 +116,65 @@ def extract_stock_symbols_from_email(email_address, password, sender_email, keyw
         st.error(f"Error: {e}")
         return pd.DataFrame(columns=['Ticker', 'Date', 'Signal'])
 
+def get_intraday_chart_url(ticker):
+    """Generates a TradingView chart URL for the first 30 minutes of the current day."""
+    now = datetime.datetime.now()
+    today_str = now.strftime("%Y-%m-%d")  # YYYY-MM-DD format
+    start_time_str = (now - datetime.timedelta(hours=0, minutes=30)).strftime("%H:%M")  # 30 mins before
+    end_time_str = now.strftime("%H:%M")  # now
+
+    # Construct the TradingView URL. Adjust the timeframe as needed.
+    url = f"https://www.tradingview.com/chart/{ticker}/?symbol={ticker}&interval=5&hidetoptoolbar=1&hideideas=1&hidelefttoolbar=1&hiderange=1&studies=%5B%5D&theme=1&style=1&timeperiod=D&from={today_str}T{start_time_str}&to={today_str}T{end_time_str}"
+    return url
+
 def main():
     st.title("Thinkorswim Alerts Analyzer")
     st.write("This app polls your Thinkorswim alerts and analyzes stock data for different keywords.")
 
-    # Add Buy Me a Coffee button using streamlit-extras
     button(username="tosalerts33", floating=False, width=221)
 
-    # Fetch SPY and QQQ prices
     spy_price, qqq_price = get_spy_qqq_prices()
 
-    # Display SPY and QQQ prices
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("SPY Latest Close Price", f"${spy_price}")
-    with col2:
-        st.metric("QQQ Latest Close Price", f"${qqq_price}")
+    if spy_price is not None and qqq_price is not None:
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("SPY Latest Close Price", f"${spy_price}")
+        with col2:
+            st.metric("QQQ Latest Close Price", f"${qqq_price}")
 
-    # Automatically poll emails and update data
     with st.spinner("Polling alerts and analyzing data..."):
-        # Define the number of columns per row
         cols_per_row = 2
-        rows = (len(KEYWORDS) + cols_per_row - 1) // cols_per_row  # Calculate the number of rows
+        rows = (len(KEYWORDS) + cols_per_row - 1) // cols_per_row
 
         for row in range(rows):
-            cols = st.columns(cols_per_row)  # Create columns for the current row
+            cols = st.columns(cols_per_row)
             for col in range(cols_per_row):
                 idx = row * cols_per_row + col
-                if idx < len(KEYWORDS):  # Check if there's a keyword for this column
+                if idx < len(KEYWORDS):
                     keyword = KEYWORDS[idx]
-                    with cols[col]:  # Use the corresponding column
-                        # Add a tooltip for the keyword
+                    with cols[col]:
                         tooltip_data = TOOLTIPS.get(keyword, {"header": keyword, "description": "No description available."})
                         st.markdown(
                             f"""
-                            
-                            
 
-                                
-{tooltip_data["header"]} ℹ️
-
+                                {tooltip_data["header"]} ℹ️
 
                                 {tooltip_data["description"]}
-                            
 
                             """,
                             unsafe_allow_html=True,
                         )
-                        
-                        # Extract and process data for the current keyword
+
                         symbols_df = extract_stock_symbols_from_email(EMAIL_ADDRESS, EMAIL_PASSWORD, SENDER_EMAIL, keyword)
                         if not symbols_df.empty:
-                            # Create a collapsible component for each table
                             with st.expander(f"Show {tooltip_data['header']} Data"):
                                 st.dataframe(symbols_df)
-                                # Add a download button for CSV inside the expander
+
+                                for index, row in symbols_df.iterrows():
+                                    ticker = row['Ticker']
+                                    chart_url = get_intraday_chart_url(ticker)
+                                    st.markdown(f'<a href="{chart_url}" target="_blank">{ticker} Intraday Chart</a>', unsafe_allow_html=True)
+
                                 csv = symbols_df.to_csv(index=False).encode('utf-8')
                                 st.download_button(
                                     label=f"Download {tooltip_data['header']} Data as CSV",
