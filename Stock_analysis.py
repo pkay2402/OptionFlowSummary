@@ -40,168 +40,178 @@ if symbol:
         df = yf.download(symbol, interval="30m", period="20d")
         
         if not df.empty:
-            # Calculate indicators
-            df = calculate_bollinger_bands(df)
-            df['MA50'] = df['Close'].rolling(window=50).mean()
-            df['RSI'] = calculate_rsi(df)
-            df['SMA9'] = df['RSI'].rolling(window=9).mean()
-            
-            # Create figure
-            fig = make_subplots(
-                rows=2, 
-                cols=1, 
-                shared_xaxes=True,
-                vertical_spacing=0.08,
-                row_heights=[0.7, 0.3],
-                subplot_titles=(f'{symbol} Price', 'RSI (14)')
-            )
-
-            # Add price candlesticks
-            fig.add_trace(
-                go.Candlestick(
-                    x=df.index,
-                    open=df['Open'],
-                    high=df['High'],
-                    low=df['Low'],
-                    close=df['Close'],
-                    name="Price",
-                    increasing_line_color='#00C805',
-                    decreasing_line_color='#FF3737',
-                    increasing_fillcolor='#00C805',
-                    decreasing_fillcolor='#FF3737'
-                ),
-                row=1, col=1
-            )
-
-            # Add Bollinger Bands
-            fig.add_trace(
-                go.Scatter(
-                    x=df.index,
-                    y=df['Upper_Band'],
-                    line=dict(color='rgba(152, 152, 152, 0.5)', width=1),
-                    name="BB Upper",
-                    showlegend=True
-                ),
-                row=1, col=1
-            )
-
-            fig.add_trace(
-                go.Scatter(
-                    x=df.index,
-                    y=df['Lower_Band'],
-                    line=dict(color='rgba(152, 152, 152, 0.5)', width=1),
-                    fill='tonexty',
-                    fillcolor='rgba(152, 152, 152, 0.1)',
-                    name="BB Lower",
-                    showlegend=True
-                ),
-                row=1, col=1
-            )
-
-            # Add MA50
-            fig.add_trace(
-                go.Scatter(
-                    x=df.index,
-                    y=df['MA50'],
-                    line=dict(color='#2962FF', width=1.5),
-                    name="MA 50"
-                ),
-                row=1, col=1
-            )
-
-            # Add RSI
-            fig.add_trace(
-                go.Scatter(
-                    x=df.index,
-                    y=df['RSI'],
-                    line=dict(color='#2962FF', width=1.5),
-                    name="RSI"
-                ),
-                row=2, col=1
-            )
-
-            # Add RSI SMA
-            fig.add_trace(
-                go.Scatter(
-                    x=df.index,
-                    y=df['SMA9'],
-                    line=dict(color='#FF6B6B', width=1.5),
-                    name="RSI SMA(9)"
-                ),
-                row=2, col=1
-            )
-
-            # Add RSI levels
-            rsi_levels = [
-                dict(y=70, color="rgba(255, 55, 55, 0.3)", text="Overbought"),
-                dict(y=50, color="rgba(152, 152, 152, 0.3)", text=""),
-                dict(y=30, color="rgba(0, 200, 5, 0.3)", text="Oversold")
-            ]
-
-            for level in rsi_levels:
-                fig.add_shape(
-                    type="line",
-                    x0=df.index[0],
-                    x1=df.index[-1],
-                    y0=level["y"],
-                    y1=level["y"],
-                    line=dict(color=level["color"], width=1, dash="dash"),
-                    row=2,
-                    col=1
+            if not df[['Open', 'High', 'Low', 'Close']].isna().all(axis=1).any():
+                # Calculate indicators
+                df = calculate_bollinger_bands(df)
+                df['MA50'] = df['Close'].rolling(window=50).mean()
+                df['RSI'] = calculate_rsi(df)
+                df['SMA9'] = df['RSI'].rolling(window=9).mean()
+                
+                # Create figure
+                fig = make_subplots(
+                    rows=2, 
+                    cols=1, 
+                    shared_xaxes=True,
+                    vertical_spacing=0.08,
+                    row_heights=[0.7, 0.3],
+                    subplot_titles=(f'{symbol} Price', 'RSI (14)')
                 )
 
-            # Update layout
-            fig.update_layout(
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)',
-                height=800,
-                margin=dict(l=50, r=50, t=50, b=50),
-                xaxis_rangeslider_visible=False,
-                showlegend=True,
-                legend=dict(
-                    bgcolor='rgba(255,255,255,0.1)',
-                    bordercolor='rgba(255,255,255,0.1)',
-                    borderwidth=1,
-                    font=dict(size=10),
-                    yanchor="top",
-                    y=0.99,
-                    xanchor="left",
-                    x=0.01
+                # Add price candlesticks first to ensure they are on top
+                fig.add_trace(
+                    go.Candlestick(
+                        x=df.index,
+                        open=df['Open'],
+                        high=df['High'],
+                        low=df['Low'],
+                        close=df['Close'],
+                        name="Price",
+                        increasing_line_color='#00C805',
+                        decreasing_line_color='#FF3737',
+                        increasing_fillcolor='#00C805',
+                        decreasing_fillcolor='#FF3737',
+                        increasing_line_width=1,
+                        decreasing_line_width=1,
+                        hoverinfo='text',
+                        text=[f'Open: {o}
+High: {h}
+Low: {l}
+Close: {c}' for o, h, l, c in zip(df['Open'], df['High'], df['Low'], df['Close'])]
+                    ),
+                    row=1, col=1
                 )
-            )
 
-            # Update axes
-            fig.update_xaxes(
-                gridcolor='rgba(128,128,128,0.1)',
-                zeroline=False,
-                showline=True,
-                linewidth=1,
-                linecolor='rgba(128,128,128,0.2)',
-                row=1, col=1
-            )
-            
-            fig.update_yaxes(
-                gridcolor='rgba(128,128,128,0.1)',
-                zeroline=False,
-                showline=True,
-                linewidth=1,
-                linecolor='rgba(128,128,128,0.2)',
-                row=1, col=1
-            )
-            
-            fig.update_yaxes(
-                gridcolor='rgba(128,128,128,0.1)',
-                zeroline=False,
-                showline=True,
-                linewidth=1,
-                linecolor='rgba(128,128,128,0.2)',
-                range=[0, 100],
-                row=2, col=1
-            )
+                # Add Bollinger Bands
+                fig.add_trace(
+                    go.Scatter(
+                        x=df.index,
+                        y=df['Upper_Band'],
+                        line=dict(color='rgba(152, 152, 152, 0.5)', width=1),
+                        name="BB Upper",
+                        showlegend=True
+                    ),
+                    row=1, col=1
+                )
 
-            # Show plot
-            st.plotly_chart(fig, use_container_width=True)
+                fig.add_trace(
+                    go.Scatter(
+                        x=df.index,
+                        y=df['Lower_Band'],
+                        line=dict(color='rgba(152, 152, 152, 0.5)', width=1),
+                        fill='tonexty',
+                        fillcolor='rgba(152, 152, 152, 0.1)',
+                        name="BB Lower",
+                        showlegend=True
+                    ),
+                    row=1, col=1
+                )
+
+                # Add MA50
+                fig.add_trace(
+                    go.Scatter(
+                        x=df.index,
+                        y=df['MA50'],
+                        line=dict(color='#2962FF', width=1.5),
+                        name="MA 50"
+                    ),
+                    row=1, col=1
+                )
+
+                # Add RSI
+                fig.add_trace(
+                    go.Scatter(
+                        x=df.index,
+                        y=df['RSI'],
+                        line=dict(color='#2962FF', width=1.5),
+                        name="RSI"
+                    ),
+                    row=2, col=1
+                )
+
+                # Add RSI SMA
+                fig.add_trace(
+                    go.Scatter(
+                        x=df.index,
+                        y=df['SMA9'],
+                        line=dict(color='#FF6B6B', width=1.5),
+                        name="RSI SMA(9)"
+                    ),
+                    row=2, col=1
+                )
+
+                # Add RSI levels
+                rsi_levels = [
+                    dict(y=70, color="rgba(255, 55, 55, 0.3)", text="Overbought"),
+                    dict(y=50, color="rgba(152, 152, 152, 0.3)", text=""),
+                    dict(y=30, color="rgba(0, 200, 5, 0.3)", text="Oversold")
+                ]
+
+                for level in rsi_levels:
+                    fig.add_shape(
+                        type="line",
+                        x0=df.index[0],
+                        x1=df.index[-1],
+                        y0=level["y"],
+                        y1=level["y"],
+                        line=dict(color=level["color"], width=1, dash="dash"),
+                        row=2,
+                        col=1
+                    )
+
+                # Update layout
+                fig.update_layout(
+                    plot_bgcolor='white',
+                    paper_bgcolor='white',
+                    height=800,
+                    margin=dict(l=50, r=50, t=50, b=50),
+                    xaxis_rangeslider_visible=False,
+                    showlegend=True,
+                    legend=dict(
+                        bgcolor='rgba(255,255,255,0.1)',
+                        bordercolor='rgba(255,255,255,0.1)',
+                        borderwidth=1,
+                        font=dict(size=10),
+                        yanchor="top",
+                        y=0.99,
+                        xanchor="left",
+                        x=0.01
+                    )
+                )
+
+                # Update axes
+                fig.update_xaxes(
+                    gridcolor='rgba(128,128,128,0.1)',
+                    zeroline=False,
+                    showline=True,
+                    linewidth=1,
+                    linecolor='rgba(128,128,128,0.2)',
+                    row=1, col=1
+                )
+                
+                fig.update_yaxes(
+                    gridcolor='rgba(128,128,128,0.1)',
+                    zeroline=False,
+                    showline=True,
+                    linewidth=1,
+                    linecolor='rgba(128,128,128,0.2)',
+                    row=1, col=1
+                )
+                
+                fig.update_yaxes(
+                    gridcolor='rgba(128,128,128,0.1)',
+                    zeroline=False,
+                    showline=True,
+                    linewidth=1,
+                    linecolor='rgba(128,128,128,0.2)',
+                    range=[0, 100],
+                    row=2, col=1
+                )
+
+                # Show plot
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.error("Some data points for OHLC are missing or NaN.")
         else:
             st.error("No data available for this symbol.")
     except Exception as e:
-        st.error(f"Error fetching data: {str(e)}")
+        st.error(f"Error in visualization: {str(e)}")
