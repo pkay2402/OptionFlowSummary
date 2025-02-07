@@ -145,43 +145,52 @@ if symbol:
             col=1
         )
         
-        # Add RSI levels
-        fig.add_hline(
-            y=80, 
-            line_dash="dot", 
-            line_color="red", 
-            annotation_text="Overbought", 
-            annotation_position="right", 
-            row=2, 
-            col=1
-        )
+        # Add RSI levels using shapes instead of hlines
+        rsi_levels = [
+            {"y": 80, "text": "Overbought", "color": "red"},
+            {"y": 50, "text": "Mid", "color": "gray"},
+            {"y": 20, "text": "Oversold", "color": "green"}
+        ]
         
-        fig.add_hline(
-            y=50, 
-            line_dash="dot", 
-            line_color="gray", 
-            annotation_text="Mid", 
-            annotation_position="right", 
-            row=2, 
-            col=1
-        )
-        
-        fig.add_hline(
-            y=20, 
-            line_dash="dot", 
-            line_color="green", 
-            annotation_text="Oversold", 
-            annotation_position="right", 
-            row=2, 
-            col=1
-        )
+        for level in rsi_levels:
+            # Add horizontal line
+            fig.add_shape(
+                type="line",
+                x0=df.index[0],
+                x1=df.index[-1],
+                y0=level["y"],
+                y1=level["y"],
+                line=dict(color=level["color"], dash="dot"),
+                row=2,
+                col=1
+            )
+            
+            # Add annotation
+            fig.add_annotation(
+                x=df.index[-1],
+                y=level["y"],
+                text=level["text"],
+                showarrow=False,
+                font=dict(color=level["color"]),
+                xref="x2",
+                yref="y2",
+                align="right",
+                xanchor="left",
+                yanchor="middle"
+            )
         
         # Update layout
         fig.update_layout(
             title=f"{symbol} - 30 Min Chart (20 Days)", 
             template="plotly_dark", 
-            height=800
+            height=800,
+            showlegend=True,
+            yaxis2=dict(range=[0, 100])  # Set RSI y-axis range
         )
+        
+        # Update y-axes labels
+        fig.update_yaxes(title_text="Price", row=1, col=1)
+        fig.update_yaxes(title_text="RSI", row=2, col=1)
         
         # Show plot
         st.plotly_chart(fig, use_container_width=True)
