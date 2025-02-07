@@ -12,13 +12,20 @@ def get_stock_data(symbol):
 # Function to calculate pivot points
 def calculate_pivots(data):
     prev_day = data.iloc[-49:-1]  # Extract previous day's data (49 candles of 30m ~ 1 day)
-    high, low, close = prev_day["High"].max(), prev_day["Low"].min(), prev_day["Close"].iloc[-1]
     
+    if prev_day.empty:
+        return None, None, None, None, None  # Avoid errors if no data
+
+    high = float(prev_day["High"].max())
+    low = float(prev_day["Low"].min())
+    close = float(prev_day["Close"].iloc[-1])
+
     PP = (high + low + close) / 3
     R1, S1 = (2 * PP) - low, (2 * PP) - high
     R2, S2 = PP + (high - low), PP - (high - low)
-    
+
     return PP, R1, S1, R2, S2
+
 
 # Function to calculate RSI
 def calculate_rsi(data, period=14):
