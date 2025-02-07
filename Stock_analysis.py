@@ -1,103 +1,81 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import yfinance as yf
 import plotly.graph_objects as go
-import numpy as np
-
-# Function to fetch stock data
-def get_stock_data(symbol):
-    data = yf.download(symbol, period="20d", interval="30m")
-    return data
+from plotly.subplots import make_subplots
 
 # Function to calculate pivot points
-def calculate_pivots(data):
-    prev_day = data.iloc[-49:-1]  # Extract previous day's data (49 candles of 30m ~ 1 day)
+def calculate_pivots(df):
+    high = df['High'].iloc[-1]
+    low = df['Low'].iloc[-1]
+    close = df['Close'].iloc[-1]
     
-    if prev_day.empty:
-        return None, None, None, None, None  # Avoid errors if no data
-
-    high = float(prev_day["High"].max())
-    low = float(prev_day["Low"].min())
-    close = float(prev_day["Close"].iloc[-1])
-
     PP = (high + low + close) / 3
-    R1, S1 = (2 * PP) - low, (2 * PP) - high
-    R2, S2 = PP + (high - low), PP - (high - low)
-
+    R1 = (2 * PP) - low
+    S1 = (2 * PP) - high
+    R2 = PP + (high - low)
+    S2 = PP - (high - low)
+    
     return PP, R1, S1, R2, S2
 
-
 # Function to calculate RSI
-def calculate_rsi(data, period=14):
-    delta = data["Close"].diff()
-    gain, loss = delta.copy(), delta.copy()
-    gain[gain < 0] = 0
-    loss[loss > 0] = 0
-
-    avg_gain = gain.rolling(window=period).mean()
-    avg_loss = abs(loss.rolling(window=period).mean())
-
-    RS = avg_gain / avg_loss
-    RSI = 100 - (100 / (1 + RS))
-    
-    return RSI
+def calculate_rsi(df, period=14):
+    delta = df['Close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
 
 # Streamlit UI
-st.title("Stock Pivot Point & RSI Analysis")
+st.title("📈 Stock Analysis - 30min Chart (20 Days)")
 
-symbol = st.text_input("Enter Stock Symbol (e.g., AAPL, TSLA, SPY):", "AAPL")
+# User input for stock symbol
+symbol = st.text_input("Enter Stock Symbol (e.g., AAPL, TSLA, SPY)", "AAPL").upper()
 
+# Fetch data
 if symbol:
-    data = get_stock_data(symbol)
-    
-    if not data.empty:
-        PP, R1, S1, R2, S2 = calculate_pivots(data)
+    df = yf.download(symbol, interval="30m", period="20d")
 
-        # Ensure values are float and check for NaN
-        PP, R1, S1, R2, S2 = map(lambda x: float(x) if np.isfinite(x) else None, [PP, R1, S1, R2, S2])
+    if not df.empty:
+        df['20_MA'] = df['Close'].rolling(window=20).mean()
+        df['50_MA'] = df['Close'].rolling(window=50).mean()
+        df['RSI'] = calculate_rsi(df)
 
-        data["RSI"] = calculate_rsi(data)
+        # Calculate pivot points
+        PP, R1, S1, R2, S2 = calculate_pivots(df)
 
-        # Plot Candlestick Chart
-        fig = go.Figure()
-        fig.add_trace(go.Candlestick(
-            x=data.index,
-            open=data["Open"], high=data["High"], low=data["Low"], close=data["Close"],
-            name="Price"
-        ))
+        # Create subplots
+        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.1,
+                            row_heights=[0.7, 0.3])
 
-        # Add Moving Averages
-        data["MA20"] = data["Close"].rolling(window=20).mean()
-        data["MA50"] = data["Close"].rolling(window=50).mean()
-        fig.add_trace(go.Scatter(x=data.index, y=data["MA20"], mode="lines", name="MA 20", line=dict(color="red")))
-        fig.add_trace(go.Scatter(x=data.index, y=data["MA50"], mode="lines", name="MA 50", line=dict(color="blue")))
+        # Candlestick chart
+        fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], 
+                                     low=df['Low'], close=df['Close'], name="Price",
+                                     increasing_line_color='green', decreasing_line_color='red'), row=1, col=1)
 
-        # Add Pivot Points
-        if PP is not None:
-            fig.add_hline(y=PP, line_dash="dot", line_color="black", annotation_text="Pivot", annotation_position="right")
-        if R1 is not None:
-            fig.add_hline(y=R1, line_dash="dot", line_color="green", annotation_text="R1", annotation_position="right")
-        if S1 is not None:
-            fig.add_hline(y=S1, line_dash="dot", line_color="red", annotation_text="S1", annotation_position="right")
-        if R2 is not None:
-            fig.add_hline(y=R2, line_dash="dot", line_color="green", annotation_text="R2", annotation_position="right")
-        if S2 is not None:
-            fig.add_hline(y=S2, line_dash="dot", line_color="red", annotation_text="S2", annotation_position="right")
+        # Moving averages
+        fig.add_trace(go.Scatter(x=df.index, y=df['20_MA'], mode="lines", name="MA 20", line=dict(color="red")), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=df['50_MA'], mode="lines", name="MA 50", line=dict(color="blue")), row=1, col=1)
 
-        fig.update_layout(title=f"{symbol} - 30 Min Chart (20 Days)", xaxis_rangeslider_visible=False)
+        # Pivot points
+        fig.add_hline(y=PP, line_dash="dot", line_color="black", annotation_text="Pivot", annotation_position="right", row=1, col=1)
+        fig.add_hline(y=R1, line_dash="dot", line_color="green", annotation_text="R1", annotation_position="right", row=1, col=1)
+        fig.add_hline(y=R2, line_dash="dot", line_color="green", annotation_text="R2", annotation_position="right", row=1, col=1)
+        fig.add_hline(y=S1, line_dash="dot", line_color="red", annotation_text="S1", annotation_position="right", row=1, col=1)
+        fig.add_hline(y=S2, line_dash="dot", line_color="red", annotation_text="S2", annotation_position="right", row=1, col=1)
 
         # RSI Plot
-        rsi_fig = go.Figure()
-        rsi_fig.add_trace(go.Scatter(x=data.index, y=data["RSI"], mode="lines", name="RSI", line=dict(color="blue")))
-        rsi_fig.add_hline(y=80, line_dash="dot", line_color="red", annotation_text="Overbought", annotation_position="right")
-        rsi_fig.add_hline(y=50, line_dash="dot", line_color="black", annotation_text="Mid", annotation_position="right")
-        rsi_fig.add_hline(y=20, line_dash="dot", line_color="green", annotation_text="Oversold", annotation_position="right")
+        fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], mode="lines", name="RSI", line=dict(color="blue")), row=2, col=1)
+        fig.add_hline(y=80, line_dash="dot", line_color="red", annotation_text="Overbought", annotation_position="right", row=2, col=1)
+        fig.add_hline(y=50, line_dash="dot", line_color="gray", annotation_text="Mid", annotation_position="right", row=2, col=1)
+        fig.add_hline(y=20, line_dash="dot", line_color="green", annotation_text="Oversold", annotation_position="right", row=2, col=1)
 
-        rsi_fig.update_layout(title=f"{symbol} - RSI Indicator")
+        fig.update_layout(title=f"{symbol} - 30 Min Chart (20 Days)", template="plotly_dark", height=800)
 
-        # Display charts
-        st.plotly_chart(fig)
-        st.plotly_chart(rsi_fig)
+        # Show plot
+        st.plotly_chart(fig, use_container_width=True)
 
     else:
-        st.error("No data found! Check the stock symbol.")
+        st.error("No data available. Please check the symbol and try again.")
