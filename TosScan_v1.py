@@ -146,13 +146,13 @@ def main():
         cols_per_row = 2
         rows = (len(KEYWORDS) + cols_per_row - 1) // cols_per_row
 
+        keyword_index = 0  # Keep track of the keyword index
         for row in range(rows):
             cols = st.columns(cols_per_row)
-            for col in range(cols_per_row):
-                idx = row * cols_per_row + col
-                if idx < len(KEYWORDS):
-                    keyword = KEYWORDS[idx]
-                    with cols[col]:
+            for col_num in range(cols_per_row):  # Use col_num for loop index
+                if keyword_index < len(KEYWORDS):
+                    keyword = KEYWORDS[keyword_index]
+                    with cols[col_num]:  # Use col_num to access the column
                         tooltip_data = TOOLTIPS.get(keyword, {"header": keyword, "description": "No description available."})
                         st.markdown(
                             f"""
@@ -170,7 +170,7 @@ def main():
                             with st.expander(f"Show {tooltip_data['header']} Data"):
                                 st.dataframe(symbols_df)
 
-                                for index, row in symbols_df.iterrows():
+                                for _, row in symbols_df.iterrows():  # _ for unused index
                                     ticker = row['Ticker']
                                     chart_url = get_intraday_chart_url(ticker)
                                     st.markdown(f'<a href="{chart_url}" target="_blank">{ticker} Intraday Chart</a>', unsafe_allow_html=True)
@@ -185,29 +185,27 @@ def main():
                         else:
                             st.warning(f"No new stock found for {keyword}.")
 
+                    keyword_index += 1  # Increment for the next keyword
+
     # Disclaimer and Important Messages
     st.markdown("---")
     st.markdown("### **Disclaimer and Important Messages**")
     st.markdown("""
-    **1. Not Financial Advice:**  
+    **1. Not Financial Advice:** 
     This tool is for informational and educational purposes only. It is not intended to provide financial, investment, or trading advice. The data and analysis provided should not be construed as a recommendation to buy, sell, or hold any security or financial instrument.
 
-    **2. No Guarantees:**  
+    **2. No Guarantees:** 
     The creator of this tool makes no guarantees regarding the accuracy, completeness, or reliability of the information provided. Stock market investments are inherently risky, and past performance is not indicative of future results.
 
-    **3. Your Responsibility:**  
+    **3. Your Responsibility:** 
     You are solely responsible for your financial decisions. The creator of this tool is not responsible for any profits or losses you may incur as a result of using this tool or acting on the information provided.
 
-    **4. Consult a Professional:**  
+    **4. Consult a Professional:** 
     Before making any financial decisions, consult with a qualified financial advisor or professional who can provide personalized advice based on your individual circumstances.
 
-    **5. Use at Your Own Risk:**  
+    **5. Use at Your Own Risk:** 
     By using this tool, you acknowledge and agree that you are using it at your own risk. The creator disclaims all liability for any damages or losses arising from your use of this tool.
     """)
 
-    # Automatically rerun the app every POLL_INTERVAL seconds
     time.sleep(POLL_INTERVAL)
     st.rerun()
-
-if __name__ == "__main__":
-    main()
