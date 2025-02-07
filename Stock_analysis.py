@@ -11,7 +11,7 @@ def get_stock_data(symbol):
 
 # Function to calculate pivot points
 def calculate_pivots(data):
-    prev_day = data.iloc[-49:-1]  # Extract previous day's data (49 candles of 30m = ~1 day)
+    prev_day = data.iloc[-49:-1]  # Extract previous day's data (49 candles of 30m ~ 1 day)
     high, low, close = prev_day["High"].max(), prev_day["Low"].min(), prev_day["Close"].iloc[-1]
     
     PP = (high + low + close) / 3
@@ -45,6 +45,10 @@ if symbol:
     
     if not data.empty:
         PP, R1, S1, R2, S2 = calculate_pivots(data)
+
+        # Ensure values are float and check for NaN
+        PP, R1, S1, R2, S2 = map(lambda x: float(x) if np.isfinite(x) else None, [PP, R1, S1, R2, S2])
+
         data["RSI"] = calculate_rsi(data)
 
         # Plot Candlestick Chart
@@ -62,11 +66,16 @@ if symbol:
         fig.add_trace(go.Scatter(x=data.index, y=data["MA50"], mode="lines", name="MA 50", line=dict(color="blue")))
 
         # Add Pivot Points
-        fig.add_hline(y=PP, line_dash="dot", line_color="black", annotation_text="Pivot", annotation_position="right")
-        fig.add_hline(y=R1, line_dash="dot", line_color="green", annotation_text="R1", annotation_position="right")
-        fig.add_hline(y=S1, line_dash="dot", line_color="red", annotation_text="S1", annotation_position="right")
-        fig.add_hline(y=R2, line_dash="dot", line_color="green", annotation_text="R2", annotation_position="right")
-        fig.add_hline(y=S2, line_dash="dot", line_color="red", annotation_text="S2", annotation_position="right")
+        if PP is not None:
+            fig.add_hline(y=PP, line_dash="dot", line_color="black", annotation_text="Pivot", annotation_position="right")
+        if R1 is not None:
+            fig.add_hline(y=R1, line_dash="dot", line_color="green", annotation_text="R1", annotation_position="right")
+        if S1 is not None:
+            fig.add_hline(y=S1, line_dash="dot", line_color="red", annotation_text="S1", annotation_position="right")
+        if R2 is not None:
+            fig.add_hline(y=R2, line_dash="dot", line_color="green", annotation_text="R2", annotation_position="right")
+        if S2 is not None:
+            fig.add_hline(y=S2, line_dash="dot", line_color="red", annotation_text="S2", annotation_position="right")
 
         fig.update_layout(title=f"{symbol} - 30 Min Chart (20 Days)", xaxis_rangeslider_visible=False)
 
