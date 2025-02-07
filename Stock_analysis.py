@@ -73,10 +73,11 @@ if symbol:
                         increasing_line_width=1,
                         decreasing_line_width=1,
                         hoverinfo='text',
-                        text=[f'Open: {o}
-High: {h}
-Low: {l}
-Close: {c}' for o, h, l, c in zip(df['Open'], df['High'], df['Low'], df['Close'])]
+                        text=[f'Open: {o}<br>' +
+                             f'High: {h}<br>' +
+                             f'Low: {l}<br>' +
+                             f'Close: {c}']
+          for o, h, l, c in zip(df['Open'], df['High'], df['Low'], df['Close'])]
                     ),
                     row=1, col=1
                 )
