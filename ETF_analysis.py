@@ -6,7 +6,7 @@ import numpy as np
 from math import ceil
 
 # Set page configuration for responsiveness
-st.set_page_config(layout="wide")
+#st.set_page_config(layout="wide")
 
 # Initialize session state for chart display
 if 'chart_symbol' not in st.session_state:
