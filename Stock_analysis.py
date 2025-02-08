@@ -196,7 +196,7 @@ with st.container():
     col1, col2, col3 = st.columns([2, 1, 1])
     
     with col1:
-        stock_list = st.text_area("Enter Stock Symbols (comma separated)", "^SPX, SPY, QQQ, UVXY, AAPL, GOOGL, META, NVDA, TSLA, AMZN, COIN").upper()
+        stock_list = st.text_area("Enter Stock Symbols (comma separated)", "^SPX, SPY, QQQ, UVXY, AAPL, GOOGL, META, NVDA, TSLA, AMZN, COIN, PLTR").upper()
         symbols = [s.strip() for s in stock_list.split(",")]
 
     with col2:
