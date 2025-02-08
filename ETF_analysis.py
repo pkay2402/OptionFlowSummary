@@ -26,7 +26,7 @@ def calculate_relative_strength(symbol_hist, spy_hist, lookback=20):
         return round(rs, 2), rs_status
     return 0, "N/A"
 
-st.title("📊 Sector ETF Market Leadership")
+st.title("📊 Sector ETF Market Leadership Last 30 days")
 
 # User input for ETFs
 etf_list = "XLC, XLY, XLP, XLE, XLF, XLV, XLI, XLB, XLRE, XLK, XLU, SMH, QQQ, IGV, XLV, IWM, DIA, XBI, ARKK"
