@@ -29,7 +29,7 @@ def calculate_relative_strength(symbol_hist, spy_hist, lookback=20):
 st.title("📊 Sector ETF Market Leadership")
 
 # User input for ETFs
-etf_list = "XLC, XLY, XLP, XLE, XLF, XLV, XLI, XLB, XLRE, XLK, XLU"
+etf_list = "XLC, XLY, XLP, XLE, XLF, XLV, XLI, XLB, XLRE, XLK, XLU, SMH, QQQ, IGV, XLV, IWM, DIA, XBI, ARKK"
 symbols = [s.strip() for s in etf_list.split(",")]
 
 # Fetch SPY data for benchmarking
