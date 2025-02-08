@@ -12,6 +12,23 @@ st.set_page_config(layout="wide")
 if 'chart_symbol' not in st.session_state:
     st.session_state['chart_symbol'] = None
 
+def calculate_rsi(data, periods=14):
+    delta = data['Close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=periods).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=periods).mean()
+    rs = gain / loss
+    return 100 - (100 / (1 + rs))
+
+def get_rsi_status(rsi):
+    if rsi > 70:
+        return "Overbought"
+    elif rsi > 50:
+        return "Strong"
+    elif rsi > 30:
+        return "Weak"
+    else:
+        return "Oversold"
+
 def fetch_stock_data(symbol, period="1d", interval="15m"):
     try:
         stock = yf.Ticker(symbol)
@@ -23,6 +40,11 @@ def fetch_stock_data(symbol, period="1d", interval="15m"):
         hist['Cumulative_Volume'] = hist['Volume'].cumsum()
         hist['Cumulative_PV'] = (hist['Close'] * hist['Volume']).cumsum()
         hist['VWAP'] = hist['Cumulative_PV'] / hist['Cumulative_Volume']
+        
+        # Calculate RSI
+        hist['RSI'] = calculate_rsi(hist)
+        current_rsi = round(hist['RSI'].iloc[-1], 2)
+        rsi_status = get_rsi_status(current_rsi)
         
         today_data = hist.iloc[-1]
         open_price = round(today_data["Open"], 2)
@@ -61,7 +83,9 @@ def fetch_stock_data(symbol, period="1d", interval="15m"):
             "VWAP": [vwap],
             "Daily Pivot": [daily_pivot],
             "Price_Vwap": [direction],
-            "KeyMAs": [key_mas]
+            "KeyMAs": [key_mas],
+            "RSI": [current_rsi],
+            "RSI_Status": [rsi_status]
         }), hist.round(2)
     except Exception as e:
         st.error(f"Error fetching data for {symbol}: {e}")
@@ -104,12 +128,15 @@ def plot_candlestick(data, symbol):
 # Streamlit UI
 st.title("📊 Live Market Dashboard")
 
-# Sidebar settings
-with st.sidebar:
-    st.header("⚙️ Settings")
+# Settings at the top
+st.header("⚙️ Settings")
+col1, col2, col3 = st.columns([2, 1, 1])
+
+with col1:
     stock_list = st.text_area("Enter Stock Symbols (comma separated)", "SPY, QQQ, UVXY, AAPL, GOOGL, META, NVDA, TSLA, AMZN, COIN").upper()
     symbols = [s.strip() for s in stock_list.split(",")]
-    
+
+with col2:
     time_frames = {
         "1 Day": "1d",
         "5 Days": "5d",
@@ -123,18 +150,18 @@ with st.sidebar:
     selected_timeframe = st.selectbox("Choose Time Frame", list(time_frames.keys()), index=0)
     period = time_frames[selected_timeframe]
 
+with col3:
     intervals = ["1m", "5m", "15m", "30m", "1h", "1d"]
     selected_interval = st.selectbox("Choose Interval", intervals, index=2)
-
     auto_refresh = st.checkbox("Auto Refresh every 5 mins")
 
 # Main content area
 st.subheader(f"📈 Stock Data for {selected_timeframe} ({selected_interval} interval)")
 
 # Create columns for the layout
-col1, col2 = st.columns([2, 1])
+main_col1, main_col2 = st.columns([2, 1])
 
-with col1:
+with main_col1:
     # Display table
     all_data = pd.DataFrame()
     stock_histories = {}
@@ -158,25 +185,31 @@ with col1:
                     if cols[j].button(f'📈 {symbol}', key=f'btn_{symbol}'):
                         st.session_state['chart_symbol'] = symbol
 
-    # Style and display the DataFrame with color coding for both columns
+    # Style and display the DataFrame with color coding
     def color_columns(val):
-        if val in ["Bullish", "Bullish"]:
-            return 'background-color: #90EE90; color: black'  # Light green
-        elif val in ["Bearish", "Bearish"]:
-            return 'background-color: #FF7F7F; color: black'  # Light red
-        elif val in ["Neutral", "Mixed"]:
-            return 'background-color: #D3D3D3; color: black'  # Light gray
+        if isinstance(val, str):
+            if val in ["Bullish", "Strong"]:
+                return 'background-color: #90EE90; color: black'  # Light green
+            elif val in ["Bearish", "Weak"]:
+                return 'background-color: #FF7F7F; color: black'  # Light red
+            elif val in ["Neutral", "Mixed"]:
+                return 'background-color: #D3D3D3; color: black'  # Light gray
+            elif val == "Overbought":
+                return 'background-color: #FFB6C1; color: black'  # Light pink
+            elif val == "Oversold":
+                return 'background-color: #87CEEB; color: black'  # Light blue
         return ''
 
     styled_df = all_data.style.format({
         'Current Price': '{:.2f}',
         'VWAP': '{:.2f}',
-        'Daily Pivot': '{:.2f}'
-    }).applymap(color_columns, subset=['Price_Vwap', 'KeyMAs'])
+        'Daily Pivot': '{:.2f}',
+        'RSI': '{:.2f}'
+    }).applymap(color_columns, subset=['Price_Vwap', 'KeyMAs', 'RSI_Status'])
     
     st.dataframe(styled_df, use_container_width=True)
 
-with col2:
+with main_col2:
     # Display chart based on session state
     if st.session_state['chart_symbol'] and st.session_state['chart_symbol'] in stock_histories:
         symbol = st.session_state['chart_symbol']
