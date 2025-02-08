@@ -41,9 +41,9 @@ def fetch_stock_data(symbol, period="1d", interval="15m"):
 
         # KeyMAs Logic
         if current_price > ema_9 and current_price > ema_21 and current_price > ema_50:
-            key_mas = "Above All (Bullish)"
+            key_mas = "Bullish"
         elif current_price < ema_9 and current_price < ema_21 and current_price < ema_50:
-            key_mas = "Below All (Bearish)"
+            key_mas = "Bearish"
         else:
             key_mas = "Mixed"
 
@@ -126,7 +126,7 @@ with st.sidebar:
     intervals = ["1m", "5m", "15m", "30m", "1h", "1d"]
     selected_interval = st.selectbox("Choose Interval", intervals, index=2)
 
-    auto_refresh = st.checkbox("Auto Refresh every 10 mins")
+    auto_refresh = st.checkbox("Auto Refresh every 5 mins")
 
 # Main content area
 st.subheader(f"📈 Stock Data for {selected_timeframe} ({selected_interval} interval)")
@@ -158,14 +158,21 @@ with col1:
                     if cols[j].button(f'📈 {symbol}', key=f'btn_{symbol}'):
                         st.session_state['chart_symbol'] = symbol
 
-    # Style and display the DataFrame
+    # Style and display the DataFrame with color coding for both columns
+    def color_columns(val):
+        if val in ["Bullish", "Bullish"]:
+            return 'background-color: #90EE90; color: black'  # Light green
+        elif val in ["Bearish", "Bearish"]:
+            return 'background-color: #FF7F7F; color: black'  # Light red
+        elif val in ["Neutral", "Mixed"]:
+            return 'background-color: #D3D3D3; color: black'  # Light gray
+        return ''
+
     styled_df = all_data.style.format({
         'Current Price': '{:.2f}',
         'VWAP': '{:.2f}',
         'Daily Pivot': '{:.2f}'
-    }).apply(lambda x: ['background-color: #90EE90' if v == "Bullish" else 
-                       'background-color: #FF7F7F' if v == "Bearish" else '' 
-                       for v in x], subset=['Price_Vwap', 'KeyMAs'])
+    }).applymap(color_columns, subset=['Price_Vwap', 'KeyMAs'])
     
     st.dataframe(styled_df, use_container_width=True)
 
@@ -181,9 +188,9 @@ if st.button("🔄 Refresh Data"):
 
 # Auto-refresh logic
 if auto_refresh:
-    st.info("Auto-refresh active. Data will update every 10 minutes.")
+    st.info("Auto-refresh active. Data will update every 5 minutes.")
     import time
-    time.sleep(600)
+    time.sleep(300)
     st.rerun()
 
 # Styling
