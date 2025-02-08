@@ -29,7 +29,52 @@ def get_rsi_status(rsi):
     else:
         return "Oversold"
 
-def fetch_stock_data(symbol, period="1d", interval="15m"):
+def calculate_support_resistance(hist, n=20):
+    # Get recent highs and lows
+    highs = hist['High'].nlargest(n)
+    lows = hist['Low'].nsmallest(n)
+    
+    # Calculate price clusters for support and resistance
+    price_clusters = pd.concat([highs, lows]).round(2)
+    price_clusters = price_clusters.value_counts().sort_index()
+    
+    # Find significant levels (where multiple price touches occurred)
+    significant_levels = price_clusters[price_clusters >= 2].index.values
+    
+    if len(significant_levels) >= 2:
+        current_price = hist['Close'].iloc[-1]
+        
+        # Find nearest support (below current price)
+        supports = significant_levels[significant_levels < current_price]
+        support = supports[-1] if len(supports) > 0 else significant_levels[0]
+        
+        # Find nearest resistance (above current price)
+        resistances = significant_levels[significant_levels > current_price]
+        resistance = resistances[0] if len(resistances) > 0 else significant_levels[-1]
+        
+        return round(support, 2), round(resistance, 2)
+    else:
+        # Fallback to simple support/resistance based on recent price action
+        return round(hist['Low'].tail(n).mean(), 2), round(hist['High'].tail(n).mean(), 2)
+
+def calculate_relative_strength(symbol_hist, spy_hist, lookback=20):
+    # Ensure we're comparing the same timeframe
+    common_dates = symbol_hist.index.intersection(spy_hist.index)
+    if len(common_dates) < 2:
+        return 0, "N/A"
+    
+    # Calculate percentage changes
+    symbol_change = symbol_hist['Close'].loc[common_dates].pct_change(periods=lookback).iloc[-1]
+    spy_change = spy_hist['Close'].loc[common_dates].pct_change(periods=lookback).iloc[-1]
+    
+    # Calculate relative strength
+    if spy_change != 0:
+        rs = ((1 + symbol_change) / (1 + spy_change) - 1) * 100
+        rs_status = "Strong" if rs > 0 else "Weak"
+        return round(rs, 2), rs_status
+    return 0, "N/A"
+
+def fetch_stock_data(symbol, period="1d", interval="5m", spy_hist=None):
     try:
         stock = yf.Ticker(symbol)
         hist = stock.history(period=period, interval=interval)
@@ -46,19 +91,25 @@ def fetch_stock_data(symbol, period="1d", interval="15m"):
         current_rsi = round(hist['RSI'].iloc[-1], 2)
         rsi_status = get_rsi_status(current_rsi)
         
+        # Calculate 21 EMA
+        hist['EMA21'] = hist['Close'].ewm(span=21, adjust=False).mean()
+        
+        # Calculate Relative Strength vs SPY
+        rs_value, rs_status = calculate_relative_strength(hist, spy_hist) if spy_hist is not None else (0, "N/A")
+        
         today_data = hist.iloc[-1]
         open_price = round(today_data["Open"], 2)
         high_price = round(hist["High"].iloc[-1], 2)
         low_price = round(hist["Low"].iloc[-1], 2)
         current_price = round(today_data["Close"], 2)
         vwap = round(hist['VWAP'].iloc[-1], 2)
+        ema_21 = round(hist['EMA21'].iloc[-1], 2)
 
         # Daily Pivot Calculation
         daily_pivot = round((high_price + low_price + current_price) / 3, 2)
 
-        # EMAs
+        # EMAs for KeyMAs Logic
         ema_9 = round(hist["Close"].ewm(span=9, adjust=False).mean().iloc[-1], 2)
-        ema_21 = round(hist["Close"].ewm(span=21, adjust=False).mean().iloc[-1], 2)
         ema_50 = round(hist["Close"].ewm(span=50, adjust=False).mean().iloc[-1], 2)
 
         # KeyMAs Logic
@@ -81,10 +132,13 @@ def fetch_stock_data(symbol, period="1d", interval="15m"):
             "Symbol": [symbol],
             "Current Price": [current_price],
             "VWAP": [vwap],
+            "EMA21": [ema_21],
+            #"RS vs SPY": [rs_value],
+            "Rel Strength SPY": [rs_status],
             "Daily Pivot": [daily_pivot],
             "Price_Vwap": [direction],
             "KeyMAs": [key_mas],
-            "RSI": [current_rsi],
+            #"RSI": [current_rsi]
             "RSI_Status": [rsi_status]
         }), hist.round(2)
     except Exception as e:
@@ -111,9 +165,17 @@ def plot_candlestick(data, symbol):
         name='VWAP',
         line=dict(color='purple', width=2)
     ))
+    
+    # Add 21 EMA
+    fig.add_trace(go.Scatter(
+        x=data.index,
+        y=data['EMA21'],
+        name='21 EMA',
+        line=dict(color='orange', width=2)
+    ))
 
     fig.update_layout(
-        title=f'{symbol} Candlestick Chart with VWAP',
+        title=f'{symbol} Candlestick Chart with VWAP and 21 EMA',
         yaxis_title='Price',
         template='plotly_white',
         height=600,
@@ -130,41 +192,42 @@ st.title("📊 Live Market Dashboard")
 
 # Settings at the top
 st.header("⚙️ Settings")
-col1, col2, col3 = st.columns([2, 1, 1])
+with st.container():
+    col1, col2, col3 = st.columns([2, 1, 1])
+    
+    with col1:
+        stock_list = st.text_area("Enter Stock Symbols (comma separated)", "^SPX, SPY, QQQ, UVXY, AAPL, GOOGL, META, NVDA, TSLA, AMZN, COIN").upper()
+        symbols = [s.strip() for s in stock_list.split(",")]
 
-with col1:
-    stock_list = st.text_area("Enter Stock Symbols (comma separated)", "SPY, QQQ, UVXY, AAPL, GOOGL, META, NVDA, TSLA, AMZN, COIN").upper()
-    symbols = [s.strip() for s in stock_list.split(",")]
+    with col2:
+        time_frames = {
+            "1 Day": "1d",
+            "5 Days": "5d",
+            "1 Month": "1mo",
+            "3 Months": "3mo",
+            "6 Months": "6mo",
+            "1 Year": "1y",
+            "2 Years": "2y",
+            "5 Years": "5y"
+        }
+        selected_timeframe = st.selectbox("Choose Time Frame", list(time_frames.keys()), index=0)
+        period = time_frames[selected_timeframe]
 
-with col2:
-    time_frames = {
-        "1 Day": "1d",
-        "5 Days": "5d",
-        "1 Month": "1mo",
-        "3 Months": "3mo",
-        "6 Months": "6mo",
-        "1 Year": "1y",
-        "2 Years": "2y",
-        "5 Years": "5y"
-    }
-    selected_timeframe = st.selectbox("Choose Time Frame", list(time_frames.keys()), index=0)
-    period = time_frames[selected_timeframe]
-
-with col3:
-    intervals = ["1m", "5m", "15m", "30m", "1h", "1d"]
-    selected_interval = st.selectbox("Choose Interval", intervals, index=2)
-    auto_refresh = st.checkbox("Auto Refresh every 5 mins")
+    with col3:
+        intervals = ["1m", "5m", "15m", "30m", "1h", "1d"]
+        selected_interval = st.selectbox("Choose Interval", intervals, index=1)
+        auto_refresh = st.checkbox("Auto Refresh every 5 mins")
 
 # Main content area
 st.subheader(f"📈 Stock Data for {selected_timeframe} ({selected_interval} interval)")
-
-# Create columns for the layout
-main_col1, main_col2 = st.columns([2, 1])
+with st.container():
+    main_col1, main_col2 = st.columns([2, 1])
 
 with main_col1:
-    # Display table
-    all_data = pd.DataFrame()
-    stock_histories = {}
+    # Fetch SPY data first for relative strength calculations
+    spy_data, spy_hist = fetch_stock_data("SPY", period=period, interval=selected_interval)
+    stock_histories = {"SPY": spy_hist}  # Initialize with SPY data
+    all_data = pd.DataFrame()  # Start with empty DataFrame
     
     # Calculate number of columns needed for buttons (3 buttons per row)
     num_symbols = len(symbols)
@@ -178,12 +241,22 @@ with main_col1:
             idx = i * num_cols + j
             if idx < num_symbols:
                 symbol = symbols[idx]
-                data, history = fetch_stock_data(symbol, period=period, interval=selected_interval)
+                if symbol == "SPY":
+                    data = spy_data  # Use already fetched SPY data
+                    history = spy_hist
+                else:
+                    data, history = fetch_stock_data(symbol, period=period, interval=selected_interval, spy_hist=spy_hist)
+                
                 if not data.empty:
                     all_data = pd.concat([all_data, data], ignore_index=True)
                     stock_histories[symbol] = history
                     if cols[j].button(f'📈 {symbol}', key=f'btn_{symbol}'):
                         st.session_state['chart_symbol'] = symbol
+
+    # Add SPY data to the display
+    if "SPY" not in all_data["Symbol"].values:
+        all_data = pd.concat([spy_data, all_data], ignore_index=True)
+    stock_histories["SPY"] = spy_hist
 
     # Style and display the DataFrame with color coding
     def color_columns(val):
@@ -203,9 +276,12 @@ with main_col1:
     styled_df = all_data.style.format({
         'Current Price': '{:.2f}',
         'VWAP': '{:.2f}',
-        'Daily Pivot': '{:.2f}',
-        'RSI': '{:.2f}'
-    }).applymap(color_columns, subset=['Price_Vwap', 'KeyMAs', 'RSI_Status'])
+        'Support': '{:.2f}',
+        'Resistance': '{:.2f}',
+        #'RS vs SPY': '{:.2f}',
+        'Daily Pivot': '{:.2f}'
+        #'RSI': '{:.2f}'
+    }).applymap(color_columns, subset=['Price_Vwap', 'KeyMAs', 'RSI_Status', 'Rel Strength SPY'])
     
     st.dataframe(styled_df, use_container_width=True)
 
