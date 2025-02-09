@@ -98,7 +98,7 @@ KEYWORD_DEFINITIONS = {
         "suggested_stop": "Below high volume node"
     },
     "Short_IT_volume": {
-        "description": "On Daily TF stocks breaking down 9ema above low volume node",
+        "description": "On Daily TF stocks breaking down 9ema below low volume node",
         "risk_level": "medium",
         "timeframe": "2 weeks",
         "suggested_stop": "Above low volume node"
