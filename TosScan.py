@@ -20,7 +20,7 @@ SENDER_EMAIL = "alerts@thinkorswim.com"
 
 # Keywords for email subjects
 KEYWORDS = [
-    "orb_bull", "orb_bear", "volume_scan", "A+Bull_30m", "tmo_long", "tmo_Short",
+    "Long_VP", "Short_VP","orb_bull", "orb_bear", "volume_scan", "A+Bull_30m", "tmo_long", "tmo_Short",
     "Long_IT_volume", "Short_IT_volume", "bull_Daily_sqz", "bear_Daily_sqz"
 ]
 
@@ -29,6 +29,8 @@ processed_email_ids = set()
 
 # Tooltip descriptions
 TOOLTIPS = {
+    "Long_VP": {"header": "Bullish 30m Volume Profile", "description": "Identifies stocks crossing above the 10 day 30mins volume low"},
+    "Short_VP": {"header": "Bearish 30m Volume Profile", "description": "Identifies stocks crossing below the 10 day 30mins volume high"},
     "orb_bull": {"header": "Bullish 30m ORB", "description": "Identifies stocks crossing above the 30m opening range."},
     "orb_bear": {"header": "Bearish 30m ORB", "description": "Identifies stocks crossing below the 30m opening range."},
     "volume_scan": {"header": "High Volume Scan", "description": "Detects stocks up 2%+ with high volume."},
