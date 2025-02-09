@@ -284,12 +284,14 @@ def main():
             with st.expander(f"📊 {keyword}", expanded=False):
                 info = KEYWORD_DEFINITIONS.get(keyword, {})
                 if info:
-                    col1, col2, col3 = st.columns([1, 1, 1])
+                    col1, col2, col3,col4 = st.columns([1, 1, 1,1])
                     with col1:
-                        st.info(f"Risk Level: {info.get('risk_level', 'N/A')}")
+                        st.info(f"Desc: {info.get('description', 'N/A')}")
                     with col2:
-                        st.info(f"Timeframe: {info.get('timeframe', 'N/A')}")
+                        st.info(f"Risk Level: {info.get('risk_level', 'N/A')}")
                     with col3:
+                        st.info(f"Timeframe: {info.get('timeframe', 'N/A')}")
+                    with col4:
                         st.info(f"Suggested Stop: {info.get('suggested_stop', 'N/A')}")
                 
                 symbols_df = extract_stock_symbols_from_email(
