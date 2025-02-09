@@ -37,8 +37,8 @@ SENDER_EMAIL = "alerts@thinkorswim.com"
 MAX_RETRIES = 3
 RETRY_DELAY = 2  # seconds
 
-# Define keywords for intraday and daily scans
-INTRADAY_KEYWORDS = ["Long_VP", "Short_VP", "orb_bull", "orb_bear", "volume_scan", "A+Bull_30m", "tmo_long", "tmo_Short"]
+# Define keywords for Intraday_timeframe and daily scans
+Intraday_timeframe_KEYWORDS = ["Long_VP", "Short_VP", "orb_bull", "orb_bear", "volume_scan", "A+Bull_30m", "tmo_long", "tmo_Short"]
 DAILY_KEYWORDS = ["Long_IT_volume", "Short_IT_volume", "bull_Daily_sqz", "bear_Daily_sqz"]
 
 # Keyword definitions with added risk levels and descriptions
@@ -46,14 +46,20 @@ KEYWORD_DEFINITIONS = {
     "Long_VP": {
         "description": "Volume Profile based long signal.",
         "risk_level": "Medium",
-        "timeframe": "Intraday",
+        "timeframe": "2 weeks",
         "suggested_stop": "Below the volume node"
     },
     "Short_VP": {
         "description": "Volume Profile based short signal.",
         "risk_level": "Medium",
-        "timeframe": "Intraday",
+        "timeframe": "2 weeks",
         "suggested_stop": "Above the volume node"
+    }
+    "orb_bull": {
+        "description": "10 mins 9 ema crossed above opening range high of 30mins",
+        "risk_level": "high",
+        "timeframe": "Intrday",
+        "suggested_stop": "Below the ORB high"
     }
 }
 
@@ -211,8 +217,8 @@ def main():
             st.rerun()
 
     # Scan type selection
-    section = st.radio("Select Scan Type", ["Intraday", "Daily"], index=0, horizontal=True)
-    selected_keywords = INTRADAY_KEYWORDS if section == "Intraday" else DAILY_KEYWORDS
+    section = st.radio("Select Scan Type", ["Intraday_timeframe", "Daily"], index=0, horizontal=True)
+    selected_keywords = Intraday_timeframe_KEYWORDS if section == "Intraday_timeframe" else DAILY_KEYWORDS
     
     st.subheader(f"{section} Scans")
     
