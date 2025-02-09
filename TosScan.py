@@ -37,8 +37,8 @@ SENDER_EMAIL = "alerts@thinkorswim.com"
 MAX_RETRIES = 3
 RETRY_DELAY = 2  # seconds
 
-# Define keywords for Intraday_timeframe and daily scans
-Intraday_timeframe_KEYWORDS = ["Long_VP", "Short_VP", "orb_bull", "orb_bear", "volume_scan", "A+Bull_30m", "tmo_long", "tmo_Short"]
+# Define keywords for Lower_timeframe and daily scans
+Lower_timeframe_KEYWORDS = ["Long_VP", "Short_VP", "orb_bull", "orb_bear", "volume_scan", "A+Bull_30m", "tmo_long", "tmo_Short"]
 DAILY_KEYWORDS = ["Long_IT_volume", "Short_IT_volume", "bull_Daily_sqz", "bear_Daily_sqz"]
 
 # Keyword definitions with added risk levels and descriptions
@@ -271,8 +271,8 @@ def main():
             st.rerun()
 
     # Scan type selection
-    section = st.radio("Select Scan Type", ["Intraday_timeframe", "Daily"], index=0, horizontal=True)
-    selected_keywords = Intraday_timeframe_KEYWORDS if section == "Intraday_timeframe" else DAILY_KEYWORDS
+    section = st.radio("Select Scan Type", ["Lower_timeframe", "Daily"], index=0, horizontal=True)
+    selected_keywords = Lower_timeframe_KEYWORDS if section == "Lower_timeframe" else DAILY_KEYWORDS
     
     st.subheader(f"{section} Scans")
     
