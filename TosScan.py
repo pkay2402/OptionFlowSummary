@@ -22,6 +22,22 @@ SENDER_EMAIL = "alerts@thinkorswim.com"
 INTRADAY_KEYWORDS = ["Long_VP", "Short_VP", "orb_bull", "orb_bear", "volume_scan", "A+Bull_30m", "tmo_long", "tmo_Short"]
 DAILY_KEYWORDS = ["Long_IT_volume", "Short_IT_volume","bull_Daily_sqz", "bear_Daily_sqz"]
 
+# Keyword definitions
+KEYWORD_DEFINITIONS = {
+    "Long_VP": "Volume Profile based long signal.",
+    "Short_VP": "Volume Profile based short signal.",
+    "orb_bull": "Opening Range Breakout - Bullish.",
+    "orb_bear": "Opening Range Breakout - Bearish.",
+    "volume_scan": "High volume scan indicator.",
+    "A+Bull_30m": "Strong bullish signal on 30-minute timeframe.",
+    "tmo_long": "True Momentum Oscillator - Long signal.",
+    "tmo_Short": "True Momentum Oscillator - Short signal.",
+    "Long_IT_volume": "Daily 9 ema crossing above volume-high node.",
+    "Short_IT_volume": "Daily 9 ema crossing below volume-low node",
+    "bull_Daily_sqz": "Daily bullish squeeze pattern detected.",
+    "bear_Daily_sqz": "Daily bearish squeeze pattern detected."
+}
+
 # Track processed email IDs
 processed_email_ids = set()
 
@@ -118,6 +134,7 @@ def main():
     
     for keyword in selected_keywords:
         with st.expander(f"Show {keyword} Data"):
+            st.write(KEYWORD_DEFINITIONS.get(keyword, "No definition available."))
             symbols_df = extract_stock_symbols_from_email(EMAIL_ADDRESS, EMAIL_PASSWORD, SENDER_EMAIL, keyword)
             if not symbols_df.empty:
                 st.dataframe(symbols_df)
@@ -130,6 +147,9 @@ def main():
                 )
             else:
                 st.warning(f"No new stock found for {keyword}.")
+    
+    # Disclaimer
+    st.markdown("**Disclaimer:** This tool is for informational purposes only and does not constitute financial advice. Trade at your own risk.")
 
 if __name__ == "__main__":
     main()
