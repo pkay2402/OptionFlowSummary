@@ -19,6 +19,8 @@ def init_session_state():
         st.session_state['processed_email_ids'] = set()
     if 'last_refresh_time' not in st.session_state:
         st.session_state['last_refresh_time'] = time.time()
+    if 'cached_data' not in st.session_state:
+        st.session_state['cached_data'] = {}
 
 # Call initialization immediately
 init_session_state()
@@ -167,7 +169,11 @@ def parse_email_body(msg):
         return ""
 
 def extract_stock_symbols_from_email(email_address, password, sender_email, keyword, days_lookback):
-    """Extract stock symbols with improved error handling and performance."""
+    # Check if this data is already in cache
+    if keyword in st.session_state['cached_data']:
+        return st.session_state['cached_data'][keyword]
+
+    # If not in cache, fetch and cache it
     try:
         mail = connect_to_email()
         mail.select('inbox')
@@ -178,7 +184,6 @@ def extract_stock_symbols_from_email(email_address, password, sender_email, keyw
 
         stock_data = []
         
-        # Process each email
         for num in data[0].split():
             if num in st.session_state['processed_email_ids']:
                 continue
@@ -208,15 +213,38 @@ def extract_stock_symbols_from_email(email_address, password, sender_email, keyw
 
         if stock_data:
             df = pd.DataFrame(stock_data, columns=['Ticker', 'Date', 'Signal'])
-            df = df.sort_values(by=['Date', 'Ticker']).drop_duplicates(subset=['Ticker'], keep='last')
+            df['Date'] = pd.to_datetime(df['Date'])  # Ensure Date is datetime
+            df = df.sort_values(by=['Date', 'Ticker']).drop_duplicates(subset=['Ticker', 'Signal', 'Date'], keep='last')
+            
+            # Cache the data for this keyword
+            st.session_state['cached_data'][keyword] = df
             return df
 
-        return pd.DataFrame(columns=['Ticker', 'Date', 'Signal'])
+        # Cache empty DataFrame if no data found
+        st.session_state['cached_data'][keyword] = pd.DataFrame(columns=['Ticker', 'Date', 'Signal'])
+        return st.session_state['cached_data'][keyword]
 
     except Exception as e:
         logger.error(f"Error in extract_stock_symbols_from_email: {e}")
         st.error(f"Error processing emails: {str(e)}")
         return pd.DataFrame(columns=['Ticker', 'Date', 'Signal'])
+
+def high_conviction_stocks(dataframes, ignore_keywords=None):
+    """Find stocks with high conviction - at least two keyword matches on the same date, ignoring specified keywords."""
+    if ignore_keywords is None:
+        ignore_keywords = []
+    
+    # Filter out the ignored keywords before processing
+    filtered_dataframes = [df[~df['Signal'].isin(ignore_keywords)] for df in dataframes if not df.empty]
+    
+    all_data = pd.concat(filtered_dataframes, ignore_index=True)
+    
+    grouped = all_data.groupby(['Date', 'Ticker'])['Signal'].agg(['count', lambda x: ', '.join(x)]).reset_index()
+    grouped.columns = ['Date', 'Ticker', 'Count', 'Signals']
+    
+    high_conviction = grouped[grouped['Count'] >= 2][['Date', 'Ticker', 'Signals']]
+    
+    return high_conviction
 
 def main():
     st.set_page_config(
@@ -238,12 +266,10 @@ def main():
             help="Choose how many days of historical alerts to analyze"
         )
         
-        # Add auto-refresh option
         auto_refresh = st.checkbox("Enable Auto-refresh", value=False)
         if auto_refresh:
             refresh_interval = st.slider("Refresh Interval (minutes)", 1, 30, 10)
         
-        # Buy Me a Coffee Button in sidebar
         st.markdown("---")
         button(username="tosalerts33", floating=False, width=221)
 
@@ -259,6 +285,8 @@ def main():
             st.metric("QQQ Latest", f"${qqq_price}")
     with col3:
         if st.button("🔄 Refresh Data"):
+            # Clear cache and processed email IDs on refresh
+            st.session_state['cached_data'].clear()
             st.session_state['processed_email_ids'].clear()
             st.rerun()
 
@@ -266,25 +294,24 @@ def main():
     if auto_refresh and st.session_state['last_refresh_time']:
         time_since_refresh = time.time() - st.session_state['last_refresh_time']
         if time_since_refresh >= refresh_interval * 60:
+            # Clear cache and processed email IDs on auto-refresh
+            st.session_state['cached_data'].clear()
             st.session_state['processed_email_ids'].clear()
             st.session_state['last_refresh_time'] = time.time()
             st.rerun()
 
     # Scan type selection
-    section = st.radio("Select Scan Type", ["Lower_timeframe", "Daily"], index=0, horizontal=True)
-    selected_keywords = Lower_timeframe_KEYWORDS if section == "Lower_timeframe" else DAILY_KEYWORDS
+    section = st.radio("Select View", ["Lower_timeframe", "Daily", "High Conviction"], index=0, horizontal=True)
     
-    st.subheader(f"{section} Scans")
-    
-    # Create tabs for different views
-    tab1, tab2 = st.tabs(["Individual Scans", "Combined View"])
-    
-    with tab1:
+    if section in ["Lower_timeframe", "Daily"]:
+        selected_keywords = Lower_timeframe_KEYWORDS if section == "Lower_timeframe" else DAILY_KEYWORDS
+        st.subheader(f"{section} Scans")
+        
         for keyword in selected_keywords:
             with st.expander(f"📊 {keyword}", expanded=False):
                 info = KEYWORD_DEFINITIONS.get(keyword, {})
                 if info:
-                    col1, col2, col3,col4 = st.columns([1, 1, 1,1])
+                    col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
                     with col1:
                         st.info(f"Desc: {info.get('description', 'N/A')}")
                     with col2:
@@ -309,32 +336,33 @@ def main():
                     )
                 else:
                     st.warning(f"No signals found for {keyword} in the last {days_lookback} day(s).")
-    
-    with tab2:
-        # Combine all signals into one view
+    elif section == "High Conviction":
+        st.subheader("High Conviction Scans")
         all_signals = []
-        for keyword in selected_keywords:
-            df = extract_stock_symbols_from_email(
-                EMAIL_ADDRESS, EMAIL_PASSWORD, SENDER_EMAIL, keyword, days_lookback
-            )
+        for keyword in Lower_timeframe_KEYWORDS + DAILY_KEYWORDS:
+            df = extract_stock_symbols_from_email(EMAIL_ADDRESS, EMAIL_PASSWORD, SENDER_EMAIL, keyword, days_lookback)
             if not df.empty:
                 all_signals.append(df)
         
         if all_signals:
-            combined_df = pd.concat(all_signals, ignore_index=True)
-            combined_df = combined_df.sort_values(['Date', 'Ticker'], ascending=[False, True])
+            # Ignore tmo_long and tmo_Short for High Conviction
+            high_conviction_df = high_conviction_stocks(all_signals, ignore_keywords=["tmo_long", "tmo_Short"])
             
-            st.dataframe(combined_df, use_container_width=True)
-            
-            csv = combined_df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="📥 Download Combined Data",
-                data=csv,
-                file_name=f"combined_alerts_{datetime.date.today()}.csv",
-                mime="text/csv",
-            )
+            if not high_conviction_df.empty:
+                st.dataframe(high_conviction_df, use_container_width=True)
+                logger.info(f"High Conviction data: {high_conviction_df.to_string()}")
+                
+                csv = high_conviction_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Download High Conviction Data",
+                    data=csv,
+                    file_name=f"high_conviction_alerts_{datetime.date.today()}.csv",
+                    mime="text/csv",
+                )
+            else:
+                st.warning("No high conviction signals found after filtering out specified keywords.")
         else:
-            st.warning(f"No signals found in the last {days_lookback} day(s).")
+            st.warning("No signals found to process for high conviction view.")
 
     # Update last refresh time
     st.session_state['last_refresh_time'] = time.time()
@@ -342,11 +370,19 @@ def main():
     # Footer
     st.markdown("---")
     st.markdown("""
-        <div style='text-align: center'>
-            <p><strong>Disclaimer:</strong> This tool is for informational purposes only and does not constitute financial advice. 
-            Trade at your own risk.</p>
-            <p>Last updated: {}</p>
-        </div>
+        
+
+            
+Disclaimer: This tool is for informational purposes only and does not constitute financial advice. 
+            Trade at your own risk.
+
+
+            
+Last updated: {}
+
+
+        
+
         """.format(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")), 
         unsafe_allow_html=True
     )
