@@ -51,13 +51,13 @@ def get_spy_qqq_prices():
     
     return spy_price, qqq_price
 
-def extract_stock_symbols_from_email(email_address, password, sender_email, keyword):
+def extract_stock_symbols_from_email(email_address, password, sender_email, keyword, days_lookback):
     try:
         mail = imaplib.IMAP4_SSL('imap.gmail.com')
         mail.login(email_address, password)
         mail.select('inbox')
 
-        date_since = (datetime.date.today() - datetime.timedelta(days=2)).strftime("%d-%b-%Y")
+        date_since = (datetime.date.today() - datetime.timedelta(days=days_lookback)).strftime("%d-%b-%Y")
         search_criteria = f'(FROM "{sender_email}" SUBJECT "{keyword}" SINCE "{date_since}")'
         _, data = mail.search(None, search_criteria)
 
@@ -118,6 +118,15 @@ def main():
     # Buy Me a Coffee Button
     button(username="tosalerts33", floating=False, width=221)
 
+    # Add days lookback slider
+    days_lookback = st.slider(
+        "Select number of days to look back",
+        min_value=1,
+        max_value=3,
+        value=1,
+        help="Choose how many days of historical alerts to analyze"
+    )
+
     # Fetch SPY and QQQ Prices
     spy_price, qqq_price = get_spy_qqq_prices()
     col1, col2 = st.columns(2)
@@ -135,7 +144,7 @@ def main():
     for keyword in selected_keywords:
         with st.expander(f"Show {keyword} Data"):
             st.write(KEYWORD_DEFINITIONS.get(keyword, "No definition available."))
-            symbols_df = extract_stock_symbols_from_email(EMAIL_ADDRESS, EMAIL_PASSWORD, SENDER_EMAIL, keyword)
+            symbols_df = extract_stock_symbols_from_email(EMAIL_ADDRESS, EMAIL_PASSWORD, SENDER_EMAIL, keyword, days_lookback)
             if not symbols_df.empty:
                 st.dataframe(symbols_df)
                 csv = symbols_df.to_csv(index=False).encode('utf-8')
