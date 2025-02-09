@@ -121,18 +121,30 @@ KEYWORD_DEFINITIONS = {
 
 @lru_cache(maxsize=2)
 def get_spy_qqq_prices():
-    """Fetch the latest closing prices for SPY and QQQ with caching."""
+    """Fetch the latest closing prices and daily changes for SPY and QQQ with caching."""
     try:
         spy = yf.Ticker("SPY")
         qqq = yf.Ticker("QQQ")
         
-        spy_price = round(spy.history(period="1d")['Close'].iloc[-1], 2)
-        qqq_price = round(qqq.history(period="1d")['Close'].iloc[-1], 2)
+        # Get today's data for both tickers
+        spy_hist = spy.history(period="2d")  # Get 2 days to calculate % change
+        qqq_hist = qqq.history(period="2d")
         
-        return spy_price, qqq_price
+        # Calculate latest prices
+        spy_price = round(spy_hist['Close'].iloc[-1], 2)
+        qqq_price = round(qqq_hist['Close'].iloc[-1], 2)
+        
+        # Calculate percentage changes
+        spy_prev_close = spy_hist['Close'].iloc[-2]
+        qqq_prev_close = qqq_hist['Close'].iloc[-2]
+        
+        spy_change = round(((spy_price - spy_prev_close) / spy_prev_close) * 100, 2)
+        qqq_change = round(((qqq_price - qqq_prev_close) / qqq_prev_close) * 100, 2)
+        
+        return spy_price, qqq_price, spy_change, qqq_change
     except Exception as e:
         logger.error(f"Error fetching market prices: {e}")
-        return None, None
+        return None, None, None, None
 
 def connect_to_email(retries=MAX_RETRIES):
     """Establish email connection with retry logic."""
@@ -173,7 +185,6 @@ def extract_stock_symbols_from_email(email_address, password, sender_email, keyw
     if keyword in st.session_state['cached_data']:
         return st.session_state['cached_data'][keyword]
 
-    # If not in cache, fetch and cache it
     try:
         mail = connect_to_email()
         mail.select('inbox')
@@ -190,9 +201,11 @@ def extract_stock_symbols_from_email(email_address, password, sender_email, keyw
 
             _, data = mail.fetch(num, '(RFC822)')
             msg = email.message_from_bytes(data[0][1])
-            email_date = parser.parse(msg['Date']).date()
             
-            if email_date.weekday() >= 5:  # Skip weekends
+            # Parse the full datetime instead of just date
+            email_datetime = parser.parse(msg['Date'])
+            
+            if email_datetime.weekday() >= 5:  # Skip weekends
                 continue
 
             body = parse_email_body(msg)
@@ -204,7 +217,7 @@ def extract_stock_symbols_from_email(email_address, password, sender_email, keyw
                     signal_type = symbol_group[1]
                     for symbol in extracted_symbols:
                         if symbol.isalpha():  # Basic symbol validation
-                            stock_data.append([symbol, email_date, signal_type])
+                            stock_data.append([symbol, email_datetime, signal_type])
             
             st.session_state['processed_email_ids'].add(num)
 
@@ -213,7 +226,6 @@ def extract_stock_symbols_from_email(email_address, password, sender_email, keyw
 
         if stock_data:
             df = pd.DataFrame(stock_data, columns=['Ticker', 'Date', 'Signal'])
-            df['Date'] = pd.to_datetime(df['Date'])  # Ensure Date is datetime
             df = df.sort_values(by=['Date', 'Ticker']).drop_duplicates(subset=['Ticker', 'Signal', 'Date'], keep='last')
             
             # Cache the data for this keyword
@@ -238,6 +250,9 @@ def high_conviction_stocks(dataframes, ignore_keywords=None):
     filtered_dataframes = [df[~df['Signal'].isin(ignore_keywords)] for df in dataframes if not df.empty]
     
     all_data = pd.concat(filtered_dataframes, ignore_index=True)
+    
+    # Convert datetime to date for grouping in high conviction
+    all_data['Date'] = all_data['Date'].dt.date
     
     grouped = all_data.groupby(['Date', 'Ticker'])['Signal'].agg(['count', lambda x: ', '.join(x)]).reset_index()
     grouped.columns = ['Date', 'Ticker', 'Count', 'Signals']
@@ -277,12 +292,22 @@ def main():
     col1, col2, col3 = st.columns([2, 2, 1])
     
     with col1:
-        spy_price, qqq_price = get_spy_qqq_prices()
-        if spy_price and qqq_price:
-            st.metric("SPY Latest", f"${spy_price}")
+        spy_price, qqq_price, spy_change, qqq_change = get_spy_qqq_prices()
+        if spy_price and spy_change is not None:
+            st.metric(
+                "SPY Latest", 
+                f"${spy_price}",
+                f"{spy_change:+.2f}%",
+                delta_color="normal"  # Using 'normal' instead of 'green'/'red'
+            )
     with col2:
-        if spy_price and qqq_price:
-            st.metric("QQQ Latest", f"${qqq_price}")
+        if qqq_price and qqq_change is not None:
+            st.metric(
+                "QQQ Latest", 
+                f"${qqq_price}",
+                f"{qqq_change:+.2f}%",
+                delta_color="normal"  # Using 'normal' instead of 'green'/'red'
+            )
     with col3:
         if st.button("🔄 Refresh Data"):
             # Clear cache and processed email IDs on refresh
@@ -326,7 +351,12 @@ def main():
                 )
                 
                 if not symbols_df.empty:
-                    st.dataframe(symbols_df, use_container_width=True)
+                    # Format datetime for display
+                    display_df = symbols_df.copy()
+                    display_df['Date'] = display_df['Date'].dt.strftime('%Y-%m-%d %H:%M:%S')
+                    st.dataframe(display_df, use_container_width=True)
+                    
+                    # Use original DataFrame for CSV export
                     csv = symbols_df.to_csv(index=False).encode('utf-8')
                     st.download_button(
                         label=f"📥 Download {keyword} Data",
@@ -336,6 +366,7 @@ def main():
                     )
                 else:
                     st.warning(f"No signals found for {keyword} in the last {days_lookback} day(s).")
+    
     elif section == "High Conviction":
         st.subheader("High Conviction Scans")
         all_signals = []
