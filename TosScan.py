@@ -21,6 +21,8 @@ def init_session_state():
         st.session_state['last_refresh_time'] = time.time()
     if 'cached_data' not in st.session_state:
         st.session_state['cached_data'] = {}
+    if 'previous_symbols' not in st.session_state:
+        st.session_state['previous_symbols'] = {}
 
 # Call initialization immediately
 init_session_state()
@@ -261,6 +263,26 @@ def high_conviction_stocks(dataframes, ignore_keywords=None):
     
     return high_conviction
 
+# Add function to calculate new symbols
+def get_new_symbols_count(keyword, current_df):
+    """Calculate number of new symbols since last refresh."""
+    if current_df.empty:
+        return 0
+        
+    # Get previous symbols for this keyword
+    previous_symbols = st.session_state['previous_symbols'].get(keyword, set())
+    
+    # Get current symbols
+    current_symbols = set(current_df['Ticker'].unique())
+    
+    # Calculate new symbols
+    new_symbols = current_symbols - previous_symbols
+    
+    # Update previous symbols for next comparison
+    st.session_state['previous_symbols'][keyword] = current_symbols
+    
+    return len(new_symbols)
+
 def main():
     st.set_page_config(
         page_title="Thinkorswim Alerts Analyzer",
@@ -333,7 +355,20 @@ def main():
         st.subheader(f"{section} Scans")
         
         for keyword in selected_keywords:
-            with st.expander(f"📊 {keyword}", expanded=False):
+            # Get the data first
+            symbols_df = extract_stock_symbols_from_email(
+                EMAIL_ADDRESS, EMAIL_PASSWORD, SENDER_EMAIL, keyword, days_lookback
+            )
+            
+            # Calculate new symbols count
+            new_count = get_new_symbols_count(keyword, symbols_df)
+            
+            # Create the expander header with badge if there are new symbols
+            header = f"📊 {keyword}"
+            if new_count > 0:
+                header = f"📊 {keyword} 🔴 {new_count} new"
+            
+            with st.expander(header, expanded=False):
                 info = KEYWORD_DEFINITIONS.get(keyword, {})
                 if info:
                     col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
@@ -346,17 +381,12 @@ def main():
                     with col4:
                         st.info(f"Suggested Stop: {info.get('suggested_stop', 'N/A')}")
                 
-                symbols_df = extract_stock_symbols_from_email(
-                    EMAIL_ADDRESS, EMAIL_PASSWORD, SENDER_EMAIL, keyword, days_lookback
-                )
-                
                 if not symbols_df.empty:
                     # Format datetime for display
                     display_df = symbols_df.copy()
                     display_df['Date'] = display_df['Date'].dt.strftime('%Y-%m-%d %H:%M:%S')
                     st.dataframe(display_df, use_container_width=True)
                     
-                    # Use original DataFrame for CSV export
                     csv = symbols_df.to_csv(index=False).encode('utf-8')
                     st.download_button(
                         label=f"📥 Download {keyword} Data",
