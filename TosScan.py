@@ -58,8 +58,62 @@ KEYWORD_DEFINITIONS = {
     "orb_bull": {
         "description": "10 mins 9 ema crossed above opening range high of 30mins",
         "risk_level": "high",
-        "timeframe": "Intrday",
+        "timeframe": "Intraday",
         "suggested_stop": "Below the ORB high"
+    },
+    "orb_bear": {
+        "description": "10 mins 9 ema crossed below opening range low of 30mins",
+        "risk_level": "high",
+        "timeframe": "Intraday",
+        "suggested_stop": "Above the ORB low"
+    },
+    "volume_scan": {
+        "description": "high intrday volume and stock atleast 2% up",
+        "risk_level": "high",
+        "timeframe": "Intraday. Enter at vwap test/and trading above 9 ema on 10mins",
+        "suggested_stop": "below vwap"
+    },
+    "A+Bull_30m": {
+        "description": "oversold stocks entering bullish zone",
+        "risk_level": "medium",
+        "timeframe": "2 weeks",
+        "suggested_stop": "below recent low/support"
+    },
+    "tmo_long": {
+        "description": "oversold stocks entering bullish momentum on 60mins",
+        "risk_level": "medium",
+        "timeframe": "2 weeks",
+        "suggested_stop": "below recent low/support"
+    },
+    "tmo_Short": {
+        "description": "overbought stocks entering losing bullish momentum on 60mins",
+        "risk_level": "medium",
+        "timeframe": "2 weeks",
+        "suggested_stop": "Above recent high/resistance"
+    },
+    "Long_IT_volume": {
+        "description": "On Daily TF stocks breaking out 9ema above high volume node",
+        "risk_level": "medium",
+        "timeframe": "2 weeks",
+        "suggested_stop": "Below high volume node"
+    },
+    "Short_IT_volume": {
+        "description": "On Daily TF stocks breaking down 9ema above low volume node",
+        "risk_level": "medium",
+        "timeframe": "2 weeks",
+        "suggested_stop": "Above low volume node"
+    },
+    "bull_Daily_sqz": {
+        "description": "On Daily TF stocks breaking out of large squeeze",
+        "risk_level": "medium",
+        "timeframe": "2 weeks",
+        "suggested_stop": "Below low of previous day"
+    },
+    "bear_Daily_sqz": {
+        "description": "On Daily TF stocks breaking down of large squeeze",
+        "risk_level": "medium",
+        "timeframe": "2 weeks",
+        "suggested_stop": "Above high of previous day"
     }
 }
 
