@@ -54,7 +54,7 @@ KEYWORD_DEFINITIONS = {
         "risk_level": "Medium",
         "timeframe": "2 weeks",
         "suggested_stop": "Above the volume node"
-    }
+    },
     "orb_bull": {
         "description": "10 mins 9 ema crossed above opening range high of 30mins",
         "risk_level": "high",
