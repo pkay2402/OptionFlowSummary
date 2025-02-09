@@ -19,8 +19,8 @@ POLL_INTERVAL = 600  # 10 minutes in seconds
 SENDER_EMAIL = "alerts@thinkorswim.com"
 
 # Define keywords for intraday and daily scans
-INTRADAY_KEYWORDS = ["Long_VP", "Short_VP", "orb_bull", "orb_bear", "volume_scan", "A+Bull_30m", "tmo_long", "tmo_Short", "Long_IT_volume", "Short_IT_volume"]
-DAILY_KEYWORDS = ["bull_Daily_sqz", "bear_Daily_sqz"]
+INTRADAY_KEYWORDS = ["Long_VP", "Short_VP", "orb_bull", "orb_bear", "volume_scan", "A+Bull_30m", "tmo_long", "tmo_Short"]
+DAILY_KEYWORDS = ["Long_IT_volume", "Short_IT_volume","bull_Daily_sqz", "bear_Daily_sqz"]
 
 # Track processed email IDs
 processed_email_ids = set()
@@ -36,8 +36,64 @@ def get_spy_qqq_prices():
     return spy_price, qqq_price
 
 def extract_stock_symbols_from_email(email_address, password, sender_email, keyword):
-    # Function logic remains unchanged
-    pass
+    try:
+        mail = imaplib.IMAP4_SSL('imap.gmail.com')
+        mail.login(email_address, password)
+        mail.select('inbox')
+
+        date_since = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%d-%b-%Y")
+        search_criteria = f'(FROM "{sender_email}" SUBJECT "{keyword}" SINCE "{date_since}")'
+        _, data = mail.search(None, search_criteria)
+
+        stock_data = []
+        for num in data[0].split():
+            if num in processed_email_ids:
+                continue  # Skip already processed emails
+
+            _, data = mail.fetch(num, '(RFC822)')
+            msg = email.message_from_bytes(data[0][1])
+            email_date = parser.parse(msg['Date']).date()
+            
+            if email_date.weekday() >= 5:  # Skip weekends
+                continue
+
+            if msg.is_multipart():
+                for part in msg.walk():
+                    if part.get_content_type() == "text/plain":
+                        body = part.get_payload(decode=True).decode()
+                    elif part.get_content_type() == "text/html":
+                        html_body = part.get_payload(decode=True).decode()
+                        soup = BeautifulSoup(html_body, "html.parser")
+                        body = soup.get_text()
+            else:
+                if msg.get_content_type() == "text/html":
+                    html_body = msg.get_payload(decode=True).decode()
+                    soup = BeautifulSoup(html_body, "html.parser")
+                    body = soup.get_text()
+                else:
+                    body = msg.get_payload(decode=True).decode()
+
+            symbols = re.findall(r'New symbols:\s*([A-Z,\s]+)\s*were added to\s*(' + re.escape(keyword) + ')', body)
+            if symbols:
+                for symbol_group in symbols:
+                    extracted_symbols = symbol_group[0].replace(" ", "").split(",")
+                    signal_type = symbol_group[1]
+                    for symbol in extracted_symbols:
+                        stock_data.append([symbol, email_date, signal_type])
+
+            processed_email_ids.add(num)  # Mark email as processed
+
+        mail.close()
+        mail.logout()
+
+        df = pd.DataFrame(stock_data, columns=['Ticker', 'Date', 'Signal'])
+        df = df.sort_values(by=['Date', 'Ticker']).drop_duplicates(subset=['Ticker'], keep='last')
+
+        return df
+
+    except Exception as e:
+        st.error(f"Error: {e}")
+        return pd.DataFrame(columns=['Ticker', 'Date', 'Signal'])
 
 def main():
     st.title("Thinkorswim Alerts Analyzer")
