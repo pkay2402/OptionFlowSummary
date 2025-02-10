@@ -43,7 +43,7 @@ RETRY_DELAY = 2  # seconds
 
 # Define keywords for Lower_timeframe and daily scans
 Lower_timeframe_KEYWORDS = ["Long_VP", "Short_VP", "orb_bull", "orb_bear", "volume_scan", "A+Bull_30m", "tmo_long", "tmo_Short"]
-DAILY_KEYWORDS = ["Long_IT_volume", "Short_IT_volume", "bull_Daily_sqz", "bear_Daily_sqz"]
+DAILY_KEYWORDS = ["Long_IT_volume", "Short_IT_volume", "bull_Daily_sqz", "bear_Daily_sqz","LSMHG_Long","LSMHG_Short"]
 
 # Keyword definitions with added risk levels and descriptions
 KEYWORD_DEFINITIONS = {
@@ -115,6 +115,18 @@ KEYWORD_DEFINITIONS = {
     },
     "bear_Daily_sqz": {
         "description": "On Daily TF stocks breaking down of large squeeze",
+        "risk_level": "medium",
+        "timeframe": "2 weeks",
+        "suggested_stop": "Above high of previous day"
+    },
+    "LSMHG_Long": {
+        "description": "On Daily TF stocks being bought on 1 yr low area and macd has crossed over",
+        "risk_level": "medium",
+        "timeframe": "1-2 months",
+        "suggested_stop": "Below low of previous day"
+    },
+    "LSMHG_Short": {
+        "description": "On Daily TF stocks being sold on 1 yr high area and macd has crossed under",
         "risk_level": "medium",
         "timeframe": "2 weeks",
         "suggested_stop": "Above high of previous day"
@@ -244,7 +256,7 @@ def extract_stock_symbols_from_email(email_address, password, sender_email, keyw
         return pd.DataFrame(columns=['Ticker', 'Date', 'Signal'])
 
 def high_conviction_stocks(dataframes, ignore_keywords=None):
-    """Find stocks with high conviction - at least two keyword matches on the same date, ignoring specified keywords."""
+    """Find stocks with high conviction - at least two unique keyword matches on the same date, ignoring specified keywords."""
     if ignore_keywords is None:
         ignore_keywords = []
     
@@ -256,10 +268,13 @@ def high_conviction_stocks(dataframes, ignore_keywords=None):
     # Convert datetime to date for grouping in high conviction
     all_data['Date'] = all_data['Date'].dt.date
     
-    grouped = all_data.groupby(['Date', 'Ticker'])['Signal'].agg(['count', lambda x: ', '.join(x)]).reset_index()
-    grouped.columns = ['Date', 'Ticker', 'Count', 'Signals']
+    # Aggregate using set to ensure unique signals
+    grouped = all_data.groupby(['Date', 'Ticker'])['Signal'].agg(lambda x: ', '.join(set(x))).reset_index()
     
-    high_conviction = grouped[grouped['Count'] >= 2][['Date', 'Ticker', 'Signals']]
+    # Count unique signals
+    grouped['Count'] = grouped['Signal'].apply(lambda x: len(x.split(', ')))
+    
+    high_conviction = grouped[grouped['Count'] >= 2][['Date', 'Ticker', 'Signal']]
     
     return high_conviction
 
