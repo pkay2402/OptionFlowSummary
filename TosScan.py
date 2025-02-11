@@ -207,7 +207,7 @@ def parse_email_body(msg):
         return ""
 
 def extract_stock_symbols_from_email(email_address, password, sender_email, keyword, days_lookback):
-    """Extract stock symbols from email alerts."""
+    """Extract stock symbols from email alerts with proper date filtering."""
     # Check if this data is already in cache
     if keyword in st.session_state['cached_data']:
         return st.session_state['cached_data'][keyword]
@@ -216,7 +216,13 @@ def extract_stock_symbols_from_email(email_address, password, sender_email, keyw
         mail = connect_to_email()
         mail.select('inbox')
 
-        date_since = (datetime.date.today() - datetime.timedelta(days=days_lookback)).strftime("%d-%b-%Y")
+        # Calculate the start date based on days_lookback
+        today = datetime.date.today()
+        start_date = today
+        if days_lookback > 1:
+            start_date = today - datetime.timedelta(days=days_lookback-1)
+        
+        date_since = start_date.strftime("%d-%b-%Y")
         search_criteria = f'(FROM "{sender_email}" SUBJECT "{keyword}" SINCE "{date_since}")'
         _, data = mail.search(None, search_criteria)
 
@@ -229,10 +235,16 @@ def extract_stock_symbols_from_email(email_address, password, sender_email, keyw
             _, data = mail.fetch(num, '(RFC822)')
             msg = email.message_from_bytes(data[0][1])
             
-            # Parse the full datetime instead of just date
+            # Parse the email datetime
             email_datetime = parser.parse(msg['Date'])
+            email_date = email_datetime.date()
             
-            if email_datetime.weekday() >= 5:  # Skip weekends
+            # Skip if email date is before start_date
+            if email_date < start_date:
+                continue
+                
+            # Skip weekends
+            if email_datetime.weekday() >= 5:
                 continue
 
             body = parse_email_body(msg)
@@ -355,9 +367,7 @@ def parse_option_symbol(option_symbol):
     
 
 def extract_option_symbols_from_email(email_address, password, sender_email, keyword, days_lookback):
-    """
-    Modified version of extract_stock_symbols_from_email for handling option symbols
-    """
+    """Extract option symbols from email alerts with proper date filtering."""
     # Check cache
     if keyword in st.session_state['cached_data']:
         return st.session_state['cached_data'][keyword]
@@ -366,7 +376,13 @@ def extract_option_symbols_from_email(email_address, password, sender_email, key
         mail = connect_to_email()
         mail.select('inbox')
 
-        date_since = (datetime.date.today() - datetime.timedelta(days=days_lookback)).strftime("%d-%b-%Y")
+        # Calculate the start date based on days_lookback
+        today = datetime.date.today()
+        start_date = today
+        if days_lookback > 1:
+            start_date = today - datetime.timedelta(days=days_lookback-1)
+            
+        date_since = start_date.strftime("%d-%b-%Y")
         search_criteria = f'(FROM "{sender_email}" SUBJECT "{keyword}" SINCE "{date_since}")'
         _, data = mail.search(None, search_criteria)
 
@@ -378,14 +394,20 @@ def extract_option_symbols_from_email(email_address, password, sender_email, key
 
             _, data = mail.fetch(num, '(RFC822)')
             msg = email.message_from_bytes(data[0][1])
-            email_datetime = parser.parse(msg['Date'])
             
-            if email_datetime.weekday() >= 5:  # Skip weekends
+            # Parse the email datetime
+            email_datetime = parser.parse(msg['Date'])
+            email_date = email_datetime.date()
+            
+            # Skip if email date is before start_date
+            if email_date < start_date:
+                continue
+                
+            # Skip weekends
+            if email_datetime.weekday() >= 5:
                 continue
 
             body = parse_email_body(msg)
-            
-            # Modified regex for option symbols
             symbols = re.findall(r'New symbols:\s*([\.\w,\s]+)\s*were added to\s*(' + re.escape(keyword) + ')', body)
             
             if symbols:
