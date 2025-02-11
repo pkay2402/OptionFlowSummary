@@ -133,12 +133,10 @@ def fetch_stock_data(symbol, period="1d", interval="5m", spy_hist=None):
             "Current Price": [current_price],
             "VWAP": [vwap],
             "EMA21": [ema_21],
-            #"RS vs SPY": [rs_value],
             "Rel Strength SPY": [rs_status],
             "Daily Pivot": [daily_pivot],
             "Price_Vwap": [direction],
             "KeyMAs": [key_mas],
-            #"RSI": [current_rsi]
             "RSI_Status": [rsi_status]
         }), hist.round(2)
     except Exception as e:
@@ -220,21 +218,32 @@ with st.container():
 
 # Main content area
 st.subheader(f"📈 Stock Data for {selected_timeframe} ({selected_interval} interval)")
+
+# Create tooltips dictionary
+tooltips = {
+    "Current Price": "The latest closing price for the stock",
+    "VWAP": "Volume Weighted Average Price - Average price weighted by volume",
+    "EMA21": "21-period Exponential Moving Average",
+    "Rel Strength SPY": "Relative strength compared to SPY (Strong: outperforming, Weak: underperforming)",
+    "Daily Pivot": "Calculated as (High + Low + Close) / 3",
+    "Price_Vwap": "Bullish: Price > VWAP & Open, Bearish: Price < VWAP & Open, Neutral: Mixed conditions",
+    "KeyMAs": "Based on 9, 21, 50 EMAs - Bullish: Price > all EMAs, Bearish: Price < all EMAs, Mixed: Other conditions",
+    "RSI_Status": "RSI indicator status - Overbought(>70), Strong(50-70), Weak(30-50), Oversold(<30)"
+}
+
 with st.container():
     main_col1, main_col2 = st.columns([2, 1])
 
 with main_col1:
     # Fetch SPY data first for relative strength calculations
     spy_data, spy_hist = fetch_stock_data("SPY", period=period, interval=selected_interval)
-    stock_histories = {"SPY": spy_hist}  # Initialize with SPY data
-    all_data = pd.DataFrame()  # Start with empty DataFrame
+    stock_histories = {"SPY": spy_hist}
+    all_data = pd.DataFrame()
     
-    # Calculate number of columns needed for buttons (3 buttons per row)
     num_symbols = len(symbols)
     num_cols = 3
     num_rows = ceil(num_symbols / num_cols)
     
-    # Create button grid
     for i in range(num_rows):
         cols = st.columns(num_cols)
         for j in range(num_cols):
@@ -242,7 +251,7 @@ with main_col1:
             if idx < num_symbols:
                 symbol = symbols[idx]
                 if symbol == "SPY":
-                    data = spy_data  # Use already fetched SPY data
+                    data = spy_data
                     history = spy_hist
                 else:
                     data, history = fetch_stock_data(symbol, period=period, interval=selected_interval, spy_hist=spy_hist)
@@ -253,40 +262,69 @@ with main_col1:
                     if cols[j].button(f'📈 {symbol}', key=f'btn_{symbol}'):
                         st.session_state['chart_symbol'] = symbol
 
-    # Add SPY data to the display
     if "SPY" not in all_data["Symbol"].values:
         all_data = pd.concat([spy_data, all_data], ignore_index=True)
     stock_histories["SPY"] = spy_hist
 
-    # Style and display the DataFrame with color coding
     def color_columns(val):
         if isinstance(val, str):
             if val in ["Bullish", "Strong"]:
-                return 'background-color: #90EE90; color: black'  # Light green
+                return 'background-color: #90EE90; color: black'
             elif val in ["Bearish", "Weak"]:
-                return 'background-color: #FF7F7F; color: black'  # Light red
+                return 'background-color: #FF7F7F; color: black'
             elif val in ["Neutral", "Mixed"]:
-                return 'background-color: #D3D3D3; color: black'  # Light gray
+                return 'background-color: #D3D3D3; color: black'
             elif val == "Overbought":
-                return 'background-color: #FFB6C1; color: black'  # Light pink
+                return 'background-color: #FFB6C1; color: black'
             elif val == "Oversold":
-                return 'background-color: #87CEEB; color: black'  # Light blue
+                return 'background-color: #87CEEB; color: black'
         return ''
 
+    # Add tooltips to the DataFrame
     styled_df = all_data.style.format({
         'Current Price': '{:.2f}',
         'VWAP': '{:.2f}',
-        'Support': '{:.2f}',
-        'Resistance': '{:.2f}',
-        #'RS vs SPY': '{:.2f}',
         'Daily Pivot': '{:.2f}'
-        #'RSI': '{:.2f}'
     }).applymap(color_columns, subset=['Price_Vwap', 'KeyMAs', 'RSI_Status', 'Rel Strength SPY'])
+
+    # Display DataFrame with tooltips
+    st.markdown("""
+        <style>
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            background-color: black;
+            color: white;
+            text-align: center;
+            padding: 5px;
+            border-radius: 6px;
+            position: absolute;
+            z-index: 1;
+            bottom: 100%;
+            left: 50%;
+            margin-left: -60px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # Display compact tooltip information above the DataFrame
+    with st.expander("ℹ️ Column Descriptions"):
+        for col, desc in tooltips.items():
+            st.markdown(f"**{col}**: {desc}")
     
+    # Display the DataFrame with styling
     st.dataframe(styled_df, use_container_width=True)
 
 with main_col2:
-    # Display chart based on session state
     if st.session_state['chart_symbol'] and st.session_state['chart_symbol'] in stock_histories:
         symbol = st.session_state['chart_symbol']
         st.plotly_chart(plot_candlestick(stock_histories[symbol], symbol), use_container_width=True)
