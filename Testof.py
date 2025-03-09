@@ -5,7 +5,16 @@ import requests
 import os
 import numpy as np
 import yfinance as yf
-import talib
+
+# Custom RSI calculation using Pandas
+def calculate_rsi(series, period=14):
+    """Calculate RSI without TA-Lib."""
+    delta = series.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
 
 # Function to load and process the CSV file
 def score_flow(flow_row):
@@ -52,7 +61,7 @@ def score_flow(flow_row):
         score -= 2
     
     # Technical Boost (if RSI available)
-    if 'RSI' in flow_row.index:
+    if 'RSI' in flow_row.index and pd.notna(flow_row['RSI']):
         if flow_row['Contract Type'] == 'CALL' and flow_row['RSI'] > 60:
             score += 1
         elif flow_row['Contract Type'] == 'PUT' and flow_row['RSI'] < 40:
@@ -61,14 +70,14 @@ def score_flow(flow_row):
     return max(score, 0)  # No negative scores
 
 def add_technical_context(df):
-    """Add RSI and 5-day change for each ticker using yfinance."""
+    """Add RSI and 5-day change for each ticker using yfinance and Pandas RSI."""
     for ticker in df['Ticker'].unique():
         try:
             stock = yf.Ticker(ticker)
-            hist = stock.history(period="5d")
-            if not hist.empty and len(hist) >= 5:
-                rsi = talib.RSI(hist['Close'], timeperiod=14)[-1]
-                change_5d = (hist['Close'][-1] - hist['Close'][0]) / hist['Close'][0] * 100
+            hist = stock.history(period="20d")  # Extend to 20d for 14-period RSI
+            if not hist.empty and len(hist) >= 14:  # Need at least 14 days for RSI
+                rsi = calculate_rsi(hist['Close'])[-1]  # Get the latest RSI value
+                change_5d = (hist['Close'][-1] - hist['Close'][-5]) / hist['Close'][-5] * 100  # Last 5 days
                 df.loc[df['Ticker'] == ticker, 'RSI'] = rsi
                 df.loc[df['Ticker'] == ticker, '5d_Change'] = change_5d
         except Exception as e:
@@ -77,7 +86,6 @@ def add_technical_context(df):
 
 def check_x_sentiment(ticker):
     """Placeholder for X sentiment analysis. Replace with real API."""
-    # In a real implementation, use Tweepy or similar to search X posts
     return 50  # Neutral default (0-100 scale)
 
 def load_csv(uploaded_file):
@@ -292,7 +300,7 @@ def generate_newsletter(df, top_n_aggressive_flows, premium_price, side_codes, t
 def send_to_discord(content, webhook_url):
     """Send newsletter to Discord."""
     try:
-        payload = {"content": content[:2000]}  # Discord has a 2000 char limit per message
+        payload = {"content": content[:2000]}  # Discord 2000 char limit
         response = requests.post(webhook_url, json=payload)
         return "Newsletter sent to Discord!" if response.status_code == 204 else f"Failed to send: {response.text}"
     except Exception as e:
