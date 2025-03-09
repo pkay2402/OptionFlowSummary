@@ -12,4 +12,3 @@ seaborn
 nest_asyncio
 beautifulsoup4
 plotly
-TA-Lib==0.4.32
